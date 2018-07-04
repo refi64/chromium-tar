@@ -666,6 +666,7 @@ ALLOWED_LICENSES = [
     'LGPL (v2.1 or later) GENERATED FILE',
     'MIT/X11 (BSD like)',
     'Public domain LGPL (v2.1 or later)',
+    'ISC',
 ]
 
 # Files permitted to report an UNKNOWN license. All files mentioned here should
