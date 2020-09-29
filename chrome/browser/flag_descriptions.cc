@@ -3123,6 +3123,17 @@ const char kSyncSetupFriendlySettingsDescription[] =
 
 #endif  // !defined(OS_ANDROID)
 
+// Linux -----------------------------------------------------------------------
+
+#if defined(OS_LINUX)
+
+const char kXdgFileChooserPortalName[] = "Use the XDG file chooser portal";
+const char kXdgFileChooserPortalDescription[] =
+    "File selection will use the XDG portal rather than GTK/KDE-specific "
+    "dialogs";
+
+#endif
+
 // Windows ---------------------------------------------------------------------
 
 #if defined(OS_WIN)
@@ -3257,15 +3268,19 @@ const char kMetalDescription[] =
 
 #endif
 
-// Chrome OS -------------------------------------------------------------------
-
-#if defined(OS_CHROMEOS)
+#if defined(OS_LINUX) && !defined(OS_ANDROID)
 
 const char kAcceleratedMjpegDecodeName[] =
     "Hardware-accelerated mjpeg decode for captured frame";
 const char kAcceleratedMjpegDecodeDescription[] =
     "Enable hardware-accelerated mjpeg decode for captured frame where "
     "available.";
+
+#endif
+
+// Chrome OS -------------------------------------------------------------------
+
+#if defined(OS_CHROMEOS)
 
 const char kAggregatedMlAppRankingName[] = "Rank suggested apps with ML.";
 const char kAggregatedMlAppRankingDescription[] =

@@ -44,9 +44,14 @@ TerminationStatus GetTerminationStatusImpl(ProcessHandle handle,
   }
 
   *exit_code = status;
+  return GetTerminationStatusForExitCode(status);
+}
 
-  if (WIFSIGNALED(status)) {
-    switch (WTERMSIG(status)) {
+}  // namespace
+
+TerminationStatus GetTerminationStatusForExitCode(int exit_code) {
+  if (WIFSIGNALED(exit_code)) {
+    switch (WTERMSIG(exit_code)) {
       case SIGABRT:
       case SIGBUS:
       case SIGFPE:
@@ -69,13 +74,11 @@ TerminationStatus GetTerminationStatusImpl(ProcessHandle handle,
     }
   }
 
-  if (WIFEXITED(status) && WEXITSTATUS(status) != 0)
+  if (WIFEXITED(exit_code) && WEXITSTATUS(exit_code) != 0)
     return TERMINATION_STATUS_ABNORMAL_TERMINATION;
 
   return TERMINATION_STATUS_NORMAL_TERMINATION;
 }
-
-}  // namespace
 
 #if !defined(OS_NACL_NONSFI)
 bool KillProcessGroup(ProcessHandle process_group_id) {

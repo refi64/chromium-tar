@@ -60,6 +60,7 @@ v8.log
 vs-chromium-project.txt
 /.clangd/
 /.clangd-index/
+/.flatpak-builder/
 # Settings directories for eclipse
 /.externalToolBuilders/
 /.settings/

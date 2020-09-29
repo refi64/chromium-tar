@@ -60,6 +60,7 @@ class CONTENT_EXPORT ZygoteHostImpl : public ZygoteHost {
   bool use_namespace_sandbox_;
   bool use_suid_sandbox_;
   bool use_suid_sandbox_for_adj_oom_score_;
+  bool use_flatpak_sandbox_;
   std::string sandbox_binary_;
 
   // This lock protects the |zygote_pids_| set.

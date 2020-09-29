@@ -38,6 +38,7 @@
 
 #if defined(OS_LINUX)
 #include "base/linux_util.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #elif defined(OS_MACOSX)
 #include "base/mac/foundation_util.h"
 #include "content/common/mac_helpers.h"
@@ -73,7 +74,12 @@ base::FilePath ChildProcessHost::GetChildPath(int flags) {
 #if defined(OS_LINUX)
   // Use /proc/self/exe rather than our known binary path so updates
   // can't swap out the binary from underneath us.
-  if (child_path.empty() && flags & CHILD_ALLOW_SELF)
+  // This is not needed for Flatpaks, where updates are going to be in
+  // a new hardlink tree.
+  if ((child_path.empty() &&
+       sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel()
+          == sandbox::FlatpakSandbox::SandboxLevel::kNone)
+      && flags & CHILD_ALLOW_SELF)
     child_path = base::FilePath(base::kProcSelfExe);
 #endif
 

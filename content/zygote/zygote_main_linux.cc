@@ -33,6 +33,7 @@
 #include "content/public/common/zygote/zygote_fork_delegate_linux.h"
 #include "content/zygote/zygote_linux.h"
 #include "sandbox/linux/services/credentials.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #include "sandbox/linux/services/init_process_reaper.h"
 #include "sandbox/linux/services/libc_interceptor.h"
 #include "sandbox/linux/services/namespace_sandbox.h"
@@ -150,6 +151,7 @@ static void EnterNamespaceSandbox(service_manager::SandboxLinux* linux_sandbox,
 
 static void EnterLayerOneSandbox(service_manager::SandboxLinux* linux_sandbox,
                                  const bool using_layer1_sandbox,
+                                 const bool using_flatpak_sandbox,
                                  base::OnceClosure post_fork_parent_callback) {
   DCHECK(linux_sandbox);
 
@@ -171,7 +173,8 @@ static void EnterLayerOneSandbox(service_manager::SandboxLinux* linux_sandbox,
   } else if (sandbox::NamespaceSandbox::InNewUserNamespace()) {
     EnterNamespaceSandbox(linux_sandbox, std::move(post_fork_parent_callback));
   } else {
-    CHECK(!using_layer1_sandbox);
+    // The Flatpak sandbox means that we're fully sandboxed from the start.
+    CHECK(!using_layer1_sandbox || using_flatpak_sandbox);
   }
 }
 
@@ -195,8 +198,11 @@ bool ZygoteMain(
       linux_sandbox->setuid_sandbox_client()->IsSuidSandboxChild();
   const bool using_namespace_sandbox =
       sandbox::NamespaceSandbox::InNewUserNamespace();
+  const bool using_flatpak_sandbox =
+      sandbox::FlatpakSandbox::GetInstance()->GetSandboxLevel()
+          == sandbox::FlatpakSandbox::SandboxLevel::kRestricted;
   const bool using_layer1_sandbox =
-      using_setuid_sandbox || using_namespace_sandbox;
+      using_setuid_sandbox || using_namespace_sandbox || using_flatpak_sandbox;
 
   if (using_setuid_sandbox) {
     linux_sandbox->setuid_sandbox_client()->CloseDummyFile();
@@ -223,7 +229,7 @@ bool ZygoteMain(
 
   // Turn on the first layer of the sandbox if the configuration warrants it.
   EnterLayerOneSandbox(
-      linux_sandbox, using_layer1_sandbox,
+      linux_sandbox, using_layer1_sandbox, using_flatpak_sandbox,
       base::BindOnce(CloseFds, linux_sandbox->GetFileDescriptorsToClose()));
 
   const int sandbox_flags = linux_sandbox->GetStatus();
@@ -234,6 +240,10 @@ bool ZygoteMain(
   const bool namespace_sandbox_engaged =
       !!(sandbox_flags & service_manager::SandboxLinux::kUserNS);
   CHECK_EQ(using_namespace_sandbox, namespace_sandbox_engaged);
+
+  const bool flatpak_sandbox_engaged =
+      !!(sandbox_flags & service_manager::SandboxLinux::kFlatpak);
+  CHECK_EQ(using_flatpak_sandbox, flatpak_sandbox_engaged);
 
   Zygote zygote(sandbox_flags, std::move(fork_delegates),
                 base::GlobalDescriptors::Descriptor(

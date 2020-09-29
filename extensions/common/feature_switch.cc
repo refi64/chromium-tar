@@ -39,12 +39,7 @@ class CommonSwitches {
                          FeatureSwitch::DEFAULT_ENABLED),
         load_media_router_component_extension(
             kLoadMediaRouterComponentExtensionFlag,
-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
-            FeatureSwitch::DEFAULT_ENABLED)
-#else
-            FeatureSwitch::DEFAULT_DISABLED)
-#endif  // BUILDFLAG(GOOGLE_CHROME_BRANDING)
-  {
+            FeatureSwitch::DEFAULT_ENABLED) {
   }
 
   FeatureSwitch force_dev_mode_highlighting;
@@ -81,10 +76,9 @@ FeatureSwitch* FeatureSwitch::load_media_router_component_extension() {
 
 FeatureSwitch::ScopedOverride::ScopedOverride(FeatureSwitch* feature,
                                               bool override_value)
-    : feature_(feature),
-      previous_value_(feature->GetOverrideValue()) {
-  feature_->SetOverrideValue(
-      override_value ? OVERRIDE_ENABLED : OVERRIDE_DISABLED);
+    : feature_(feature), previous_value_(feature->GetOverrideValue()) {
+  feature_->SetOverrideValue(override_value ? OVERRIDE_ENABLED
+                                            : OVERRIDE_DISABLED);
 }
 
 FeatureSwitch::ScopedOverride::~ScopedOverride() {

@@ -534,6 +534,10 @@ void XWindow::SetFullscreen(bool fullscreen) {
                  x11::Atom::None);
 }
 
+void XWindow::SetBypassCompositor(bool bypass) {
+  SetIntProperty(xwindow_, "_NET_WM_BYPASS_COMPOSITOR", "CARDINAL", bypass);
+}
+
 void XWindow::Activate() {
   if (!IsXWindowVisible() || !activatable_)
     return;

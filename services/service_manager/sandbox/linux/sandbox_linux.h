@@ -12,6 +12,7 @@
 #include "base/check_op.h"
 #include "base/macros.h"
 #include "base/posix/global_descriptors.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #include "sandbox/linux/syscall_broker/broker_command.h"
 #include "sandbox/linux/syscall_broker/broker_file_permission.h"
 #include "services/service_manager/sandbox/export.h"
@@ -87,6 +88,9 @@ class SERVICE_MANAGER_SANDBOX_EXPORT SandboxLinux {
 
     // User namespace sandbox active.
     kUserNS = 1 << 6,
+
+    // Flatpak sandbox active.
+    kFlatpak = 1 << 7,
 
     // A flag that denotes an invalid sandbox status.
     kInvalid = 1 << 31,
@@ -282,6 +286,9 @@ class SERVICE_MANAGER_SANDBOX_EXPORT SandboxLinux {
   bool seccomp_bpf_supported_;             // Accurate if pre_initialized_.
   bool seccomp_bpf_with_tsync_supported_;  // Accurate if pre_initialized_.
   bool yama_is_enforcing_;                 // Accurate if pre_initialized_.
+  // Accurate if pre_initialized_, used to save the state of the Flatpak sandbox, as once
+  // we're in the BPF sandbox any attempts to check the Flatpak state will cause EPERM errors.
+  sandbox::FlatpakSandbox::SandboxLevel flatpak_sandbox_level_;
   bool initialize_sandbox_ran_;            // InitializeSandbox() was called.
   std::unique_ptr<sandbox::SetuidSandboxClient> setuid_sandbox_client_;
 #if BUILDFLAG(USING_SANITIZER)

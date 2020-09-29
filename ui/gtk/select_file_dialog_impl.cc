@@ -7,15 +7,19 @@
 #include "ui/gtk/select_file_dialog_impl.h"
 
 #include "base/environment.h"
+#include "base/feature_list.h"
 #include "base/files/file_util.h"
 #include "base/nix/xdg_util.h"
+#include "base/notreached.h"
 #include "base/threading/thread_restrictions.h"
+#include "content/public/common/content_features.h"
+#include "ui/gtk/select_file_dialog_impl_portal.h"
 
 namespace {
 
-enum UseKdeFileDialogStatus { UNKNOWN, NO_KDE, YES_KDE };
+enum FileDialogChoiceStatus { kUnknown, kGtk, kKde, kPortal };
 
-UseKdeFileDialogStatus use_kde_ = UNKNOWN;
+FileDialogChoiceStatus dialog_status_ = kUnknown;
 
 }  // namespace
 
@@ -25,12 +29,21 @@ base::FilePath* SelectFileDialogImpl::last_saved_path_ = nullptr;
 base::FilePath* SelectFileDialogImpl::last_opened_path_ = nullptr;
 
 // static
-ui::SelectFileDialog* SelectFileDialogImpl::Create(
-    ui::SelectFileDialog::Listener* listener,
-    std::unique_ptr<ui::SelectFilePolicy> policy) {
-  if (use_kde_ == UNKNOWN) {
-    // Start out assumimg we are not going to use KDE.
-    use_kde_ = NO_KDE;
+void SelectFileDialogImpl::InitializeFactory() {
+  if (dialog_status_ != kUnknown) {
+    return;
+  }
+
+  // Start out assumimg we are going to use GTK.
+  dialog_status_ = kGtk;
+
+  // Check to see if the portal is available.
+  if (base::FeatureList::IsEnabled(features::kXdgFileChooserPortal) &&
+      SelectFileDialogImplPortal::IsPortalAvailable()) {
+    dialog_status_ = kPortal;
+  } else {
+    // Make sure to kill the portal connection.
+    SelectFileDialogImplPortal::DestroyPortalConnection();
 
     // Check to see if KDE is the desktop environment.
     std::unique_ptr<base::Environment> env(base::Environment::Create());
@@ -43,22 +56,42 @@ ui::SelectFileDialog* SelectFileDialogImpl::Create(
       if (!env->HasVar("NO_CHROME_KDE_FILE_DIALOG")) {
         // Check to see if the KDE dialog works.
         if (SelectFileDialogImpl::CheckKDEDialogWorksOnUIThread()) {
-          use_kde_ = YES_KDE;
+          dialog_status_ = kKde;
         }
       }
     }
   }
+}
 
-  if (use_kde_ == NO_KDE) {
-    return SelectFileDialogImpl::NewSelectFileDialogImplGTK(listener,
-                                                            std::move(policy));
+// static
+void SelectFileDialogImpl::DestroyFactory() {
+  if (dialog_status_ == kPortal) {
+    SelectFileDialogImplPortal::DestroyPortalConnection();
   }
+}
 
-  std::unique_ptr<base::Environment> env(base::Environment::Create());
-  base::nix::DesktopEnvironment desktop =
-      base::nix::GetDesktopEnvironment(env.get());
-  return SelectFileDialogImpl::NewSelectFileDialogImplKDE(
-      listener, std::move(policy), desktop);
+// static
+ui::SelectFileDialog* SelectFileDialogImpl::Create(
+    ui::SelectFileDialog::Listener* listener,
+    std::unique_ptr<ui::SelectFilePolicy> policy) {
+  switch (dialog_status_) {
+    case kGtk:
+      return SelectFileDialogImpl::NewSelectFileDialogImplGTK(
+          listener, std::move(policy));
+    case kPortal:
+      return SelectFileDialogImpl::NewSelectFileDialogImplPortal(
+          listener, std::move(policy));
+    case kKde: {
+      std::unique_ptr<base::Environment> env(base::Environment::Create());
+      base::nix::DesktopEnvironment desktop =
+          base::nix::GetDesktopEnvironment(env.get());
+      return SelectFileDialogImpl::NewSelectFileDialogImplKDE(
+          listener, std::move(policy), desktop);
+    }
+    case kUnknown:
+      CHECK(false) << "InitializeFactory was never called";
+      return nullptr;
+  }
 }
 
 SelectFileDialogImpl::SelectFileDialogImpl(

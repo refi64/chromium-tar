@@ -29,6 +29,7 @@
 #include "content/public/common/content_switches.h"
 #include "sandbox/linux/seccomp-bpf/sandbox_bpf.h"
 #include "sandbox/linux/services/credentials.h"
+#include "sandbox/linux/services/flatpak_sandbox.h"
 #include "sandbox/linux/services/namespace_sandbox.h"
 #include "sandbox/linux/services/proc_util.h"
 #include "sandbox/linux/services/resource_limits.h"
@@ -127,6 +128,8 @@ void NaClSandbox::InitializeLayerOneSandbox() {
   // Check that IsSandboxed() works. We should not be sandboxed at this point.
   CHECK(!IsSandboxed()) << "Unexpectedly sandboxed!";
 
+  sandbox::FlatpakSandbox::SandboxLevel flatpak_sandbox_level = sandbox::FlatpakSandbox::GetInstance->GetSandboxLevel();
+
   if (setuid_sandbox_client_->IsSuidSandboxChild()) {
     setuid_sandbox_client_->CloseDummyFile();
 
@@ -151,6 +154,12 @@ void NaClSandbox::InitializeLayerOneSandbox() {
 
     CHECK(IsSandboxed());
     layer_one_enabled_ = true;
+  } else if (flatpak_sandbox_level
+             != sandbox::FlatpakSandbox::SandboxLevel::kNone) {
+    CHECK(flatpak_sandbox_level
+          == sandbox::FlatpakSandbox::SandboxLevel::kRestricted);
+    // We intentionally don't call IsSandboxed() here, as Flatpak has already
+    // moved us to a new mount namespace, but /proc/self/exe is still accessible.
   }
 }
 

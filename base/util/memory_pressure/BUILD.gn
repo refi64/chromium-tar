@@ -51,6 +51,13 @@ source_set("memory_pressure") {
       "system_memory_pressure_evaluator_chromeos.h",
     ]
   }
+
+  if (is_linux && !is_chromeos) {
+    sources += [
+      "system_memory_pressure_evaluator_linux.cc",
+      "system_memory_pressure_evaluator_linux.h",
+    ]
+  }
 }
 
 source_set("unittests") {
@@ -84,6 +91,10 @@ source_set("unittests") {
 
   if (is_chromeos) {
     sources += [ "system_memory_pressure_evaluator_chromeos_unittest.cc" ]
+  }
+
+  if (is_linux && !is_chromeos) {
+    sources += [ "system_memory_pressure_evaluator_linux_unittest.cc" ]
   }
 }
 

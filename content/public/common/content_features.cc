@@ -876,6 +876,12 @@ const base::Feature kWebUIPolymer2Exceptions{"WebUIPolymer2Exceptions",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
 #endif  // defined(OS_CHROMEOS)
 
+#if defined(OS_LINUX)
+// Enables use of the XDG file chooser portal for file selection.
+const base::Feature kXdgFileChooserPortal{"XdgFileChooserPortal",
+                                          base::FEATURE_ENABLED_BY_DEFAULT};
+#endif  // defined(OS_LINUX)
+
 #if defined(OS_MACOSX)
 // Enables caching of media devices for the purpose of enumerating them.
 const base::Feature kDeviceMonitorMac{"DeviceMonitorMac",

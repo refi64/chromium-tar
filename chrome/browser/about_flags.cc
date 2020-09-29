@@ -2372,7 +2372,7 @@ const FeatureEntry kFeatureEntries[] = {
         "disable-accelerated-video-decode",
         flag_descriptions::kAcceleratedVideoDecodeName,
         flag_descriptions::kAcceleratedVideoDecodeDescription,
-        kOsMac | kOsWin | kOsCrOS | kOsAndroid,
+        kOsAll,
         SINGLE_DISABLE_VALUE_TYPE(switches::kDisableAcceleratedVideoDecode),
     },
     {
@@ -2823,10 +2823,10 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kWebXrForceRuntimeDescription, kOsDesktop,
      MULTI_VALUE_TYPE(kWebXrForceRuntimeChoices)},
 #endif  // ENABLE_VR
-#if defined(OS_CHROMEOS)
+#if defined(OS_LINUX) && !defined(OS_ANDROID)
     {"disable-accelerated-mjpeg-decode",
      flag_descriptions::kAcceleratedMjpegDecodeName,
-     flag_descriptions::kAcceleratedMjpegDecodeDescription, kOsCrOS,
+     flag_descriptions::kAcceleratedMjpegDecodeDescription, kOsCrOS | kOsLinux,
      SINGLE_DISABLE_VALUE_TYPE(switches::kDisableAcceleratedMjpegDecode)},
 #endif  // OS_CHROMEOS
     {"system-keyboard-lock", flag_descriptions::kSystemKeyboardLockName,
@@ -4290,6 +4290,13 @@ const FeatureEntry kFeatureEntries[] = {
      flag_descriptions::kVaapiWebPImageDecodeAccelerationDescription, kOsCrOS,
      FEATURE_VALUE_TYPE(features::kVaapiWebPImageDecodeAcceleration)},
 #endif
+
+#if defined(OS_LINUX)
+    {"enable-xdg-file-chooser-portal",
+     flag_descriptions::kXdgFileChooserPortalName,
+     flag_descriptions::kXdgFileChooserPortalDescription, kOsLinux,
+     FEATURE_VALUE_TYPE(features::kXdgFileChooserPortal)},
+#endif  // OS_LINUX
 
 #if defined(OS_WIN)
     {"calculate-native-win-occlusion",

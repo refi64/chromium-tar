@@ -115,7 +115,7 @@ bool Zygote::ProcessRequests() {
   PCHECK(sigaddset(&sigset, SIGCHLD) == 0);
   PCHECK(sigprocmask(SIG_BLOCK, &sigset, &orig_sigmask) == 0);
 
-  if (UsingSUIDSandbox() || UsingNSSandbox()) {
+  if (UsingSUIDSandbox() || UsingNSSandbox() || UsingFlatpakSandbox()) {
     // Let the ZygoteHost know we are ready to go.
     // The receiving code is in
     // content/browser/zygote_host/zygote_host_impl_linux.cc.
@@ -219,6 +219,10 @@ bool Zygote::UsingSUIDSandbox() const {
 
 bool Zygote::UsingNSSandbox() const {
   return sandbox_flags_ & service_manager::SandboxLinux::kUserNS;
+}
+
+bool Zygote::UsingFlatpakSandbox() const {
+  return sandbox_flags_ & service_manager::SandboxLinux::kFlatpak;
 }
 
 bool Zygote::HandleRequestFromBrowser(int fd) {

@@ -44,6 +44,8 @@ jumbo_component("gtk") {
     "select_file_dialog_impl_gtk.cc",
     "select_file_dialog_impl_gtk.h",
     "select_file_dialog_impl_kde.cc",
+    "select_file_dialog_impl_portal.cc",
+    "select_file_dialog_impl_portal.h",
     "settings_provider.h",
     "settings_provider_gtk.cc",
     "settings_provider_gtk.h",
@@ -72,6 +74,9 @@ jumbo_component("gtk") {
     # our own HarfBuzz avoid mixing symbols from system HarfBuzz and
     # our own through the indirect dependency to harfbuzz-ng here.
     "//build/config/linux/gtk",
+    "//components/dbus/thread_linux",
+    "//content/public/common",
+    "//dbus",
     "//third_party:freetype_harfbuzz",
     "//ui/aura",
     "//ui/base",
@@ -90,6 +95,7 @@ jumbo_component("gtk") {
     "//ui/shell_dialogs",
     "//ui/strings",
     "//ui/views",
+    "//url",
   ]
 
   if (use_cups) {

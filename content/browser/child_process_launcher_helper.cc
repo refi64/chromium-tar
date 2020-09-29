@@ -51,6 +51,10 @@ ChildProcessLauncherHelper::Process::Process(Process&& other)
       ,
       zygote(other.zygote)
 #endif
+#if defined(OS_LINUX)
+      ,
+      flatpak_host_pid(other.flatpak_host_pid)
+#endif
 {
 }
 
@@ -61,6 +65,9 @@ ChildProcessLauncherHelper::Process::Process::operator=(
   process = std::move(other.process);
 #if BUILDFLAG(USE_ZYGOTE_HANDLE)
   zygote = other.zygote;
+#endif
+#if defined(OS_LINUX)
+  flatpak_host_pid = other.flatpak_host_pid;
 #endif
   return *this;
 }

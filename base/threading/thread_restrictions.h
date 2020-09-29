@@ -262,6 +262,10 @@ namespace resource_coordinator {
 class TabManagerDelegate;
 }
 
+namespace sandbox {
+class FlatpakSandbox;
+}
+
 namespace service_manager {
 class ServiceProcessLauncher;
 }
@@ -387,6 +391,7 @@ class BASE_EXPORT ScopedAllowBlocking {
   friend class printing::LocalPrinterHandlerDefault;
   friend class printing::PrintJobWorker;
   friend class resource_coordinator::TabManagerDelegate;  // crbug.com/778703
+  friend class sandbox::FlatpakSandbox;
   friend class web::WebSubThread;
   friend class weblayer::BrowserContextImpl;
   friend class weblayer::ContentBrowserClientImpl;
@@ -454,6 +459,7 @@ class BASE_EXPORT ScopedAllowBaseSyncPrimitives {
   friend class rlz_lib::FinancialPing;
   friend class shell_integration_linux::
       LaunchXdgUtilityScopedAllowBaseSyncPrimitives;
+  friend class sandbox::FlatpakSandbox;
   friend class syncer::HttpBridge;
   friend class syncer::GetLocalChangesRequest;
   friend class syncer::ModelSafeWorker;

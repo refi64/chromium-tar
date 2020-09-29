@@ -24,6 +24,11 @@ namespace gtk {
 // Shared implementation SelectFileDialog used by SelectFileDialogImplGTK
 class SelectFileDialogImpl : public ui::SelectFileDialog {
  public:
+  // Called to set which dialog factory method to use.
+  static void InitializeFactory();
+
+  static void DestroyFactory();
+
   // Main factory method which returns correct type.
   static ui::SelectFileDialog* Create(
       Listener* listener,
@@ -38,6 +43,10 @@ class SelectFileDialogImpl : public ui::SelectFileDialog {
       Listener* listener,
       std::unique_ptr<ui::SelectFilePolicy> policy,
       base::nix::DesktopEnvironment desktop);
+  // Factory method for creating an XDG portal-backed SelectFileDialogImpl
+  static SelectFileDialogImpl* NewSelectFileDialogImplPortal(
+      Listener* listener,
+      std::unique_ptr<ui::SelectFilePolicy> policy);
 
   // Returns true if the SelectFileDialog class returned by
   // NewSelectFileDialogImplKDE will actually work.

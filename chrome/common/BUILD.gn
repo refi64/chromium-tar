@@ -637,6 +637,10 @@ static_library("constants") {
       "//third_party/widevine/cdm:headers",
     ]
   }
+
+  if (is_linux) {
+    deps += [ "//sandbox/linux:sandbox_services" ]
+  }
 }
 
 # Use a static library here because many test binaries depend on this but don't

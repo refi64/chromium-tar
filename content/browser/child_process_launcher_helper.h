@@ -90,6 +90,10 @@ class ChildProcessLauncherHelper :
 #if BUILDFLAG(USE_ZYGOTE_HANDLE)
     ZygoteHandle zygote = nullptr;
 #endif  // BUILDFLAG(USE_ZYGOTE_HANDLE)
+
+#if defined(OS_LINUX)
+    base::ProcessId flatpak_host_pid = 0;
+#endif
   };
 
   ChildProcessLauncherHelper(

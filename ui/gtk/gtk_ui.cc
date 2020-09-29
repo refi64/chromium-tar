@@ -391,6 +391,8 @@ GtkUi::GtkUi(ui::GtkUiDelegate* delegate) : delegate_(delegate) {
 GtkUi::~GtkUi() {
   gtk_widget_destroy(fake_window_);
   g_gtk_ui = nullptr;
+
+  SelectFileDialogImpl::DestroyFactory();
 }
 
 ui::GtkUiDelegate* GtkUi::GetDelegate() {
@@ -442,6 +444,8 @@ void GtkUi::Initialize() {
   printing::PrintingContextLinux::SetPdfPaperSizeFunction(
       &GetPdfPaperSizeDeviceUnitsGtk);
 #endif
+
+  SelectFileDialogImpl::InitializeFactory();
 
   // We must build this after GTK gets initialized.
   settings_provider_ = CreateSettingsProvider(this);

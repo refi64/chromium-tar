@@ -100,6 +100,10 @@ BASE_EXPORT TerminationStatus GetTerminationStatus(ProcessHandle handle,
                                                    int* exit_code);
 
 #if defined(OS_POSIX)
+// Get the termination status that corresponds to a process's given
+// |exit_code|, which is the status set by waitpid.
+BASE_EXPORT TerminationStatus GetTerminationStatusForExitCode(int exit_code);
+
 // Send a kill signal to the process and then wait for the process to exit
 // and get the termination status.
 //

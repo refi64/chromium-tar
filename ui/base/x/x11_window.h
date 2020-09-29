@@ -107,6 +107,7 @@ class COMPONENT_EXPORT(UI_BASE_X) XWindow {
   bool Hide();
   void Unhide();
   void SetFullscreen(bool fullscreen);
+  void SetBypassCompositor(bool bypass);
   void Activate();
   void Deactivate();
   bool IsActive() const;

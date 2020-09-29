@@ -62,6 +62,8 @@ class Zygote {
   bool UsingSUIDSandbox() const;
   // Returns true if the NS sandbox is active.
   bool UsingNSSandbox() const;
+  // Returns true if the Flatpak sandbox is active.
+  bool UsingFlatpakSandbox() const;
 
   // ---------------------------------------------------------------------------
   // Requests from the browser...

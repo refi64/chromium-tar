@@ -188,6 +188,10 @@ CONTENT_EXPORT extern const base::Feature kWebNfc;
 CONTENT_EXPORT extern const base::Feature kWebUIPolymer2Exceptions;
 #endif
 
+#if defined(OS_LINUX)
+CONTENT_EXPORT extern const base::Feature kXdgFileChooserPortal;
+#endif
+
 #if defined(OS_MACOSX)
 CONTENT_EXPORT extern const base::Feature kDeviceMonitorMac;
 CONTENT_EXPORT extern const base::Feature kIOSurfaceCapturer;
