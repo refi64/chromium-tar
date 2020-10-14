@@ -84,8 +84,8 @@ DevToolsClientImpl::DevToolsClientImpl(const SyncWebSocketFactory& factory,
       crashed_(false),
       detached_(false),
       id_(id),
-      frontend_closer_func_(base::Bind(&FakeCloseFrontends)),
-      parser_func_(base::Bind(&internal::ParseInspectorMessage)),
+      frontend_closer_func_(base::BindRepeating(&FakeCloseFrontends)),
+      parser_func_(base::BindRepeating(&internal::ParseInspectorMessage)),
       unnotified_event_(nullptr),
       next_id_(1),
       stack_count_(0) {
@@ -105,7 +105,7 @@ DevToolsClientImpl::DevToolsClientImpl(
       detached_(false),
       id_(id),
       frontend_closer_func_(frontend_closer_func),
-      parser_func_(base::Bind(&internal::ParseInspectorMessage)),
+      parser_func_(base::BindRepeating(&internal::ParseInspectorMessage)),
       unnotified_event_(nullptr),
       next_id_(1),
       stack_count_(0) {
@@ -185,6 +185,10 @@ Status DevToolsClientImpl::ConnectIfNecessary() {
     }
   }
 
+  return SetUpDevTools();
+}
+
+Status DevToolsClientImpl::SetUpDevTools() {
   // These lines must be before the following SendCommandXxx calls
   unnotified_connect_listeners_ = listeners_;
   unnotified_event_listeners_.clear();

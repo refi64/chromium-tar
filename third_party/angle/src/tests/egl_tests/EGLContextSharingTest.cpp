@@ -175,7 +175,6 @@ TEST_P(EGLContextSharingTest, DisplayShareGroupObjectSharing)
     ASSERT_GL_TRUE(glIsTexture(textureFromCtx0));
 
     ASSERT_GL_FALSE(glIsBuffer(bufferFromCtx0));
-    glDeleteBuffers(1, &bufferFromCtx0);
     ASSERT_GL_NO_ERROR();
 
     // Call readpixels on the texture to verify that the backend has proper support
@@ -585,6 +584,7 @@ ANGLE_INSTANTIATE_TEST(EGLContextSharingTest,
                        ES2_D3D9(),
                        ES2_D3D11(),
                        ES3_D3D11(),
+                       ES2_METAL(),
                        ES2_OPENGL(),
                        ES3_OPENGL(),
                        ES2_VULKAN(),

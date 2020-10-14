@@ -230,6 +230,9 @@ TEST_P(EGLSurfacelessContextTest, Switcheroo)
     ANGLE_SKIP_TEST_IF(!checkExtension());
     ANGLE_SKIP_TEST_IF(!mSupportsPbuffers);
 
+    // Fails on NVIDIA Shield TV (http://anglebug.com/4924)
+    ANGLE_SKIP_TEST_IF(IsAndroid() && IsNVIDIA());
+
     EGLContext context = createContext();
     EGLSurface pbuffer = createPbuffer(500, 500);
 
@@ -271,5 +274,7 @@ TEST_P(EGLSurfacelessContextTest, Switcheroo)
 ANGLE_INSTANTIATE_TEST(EGLSurfacelessContextTest,
                        WithNoFixture(ES2_D3D9()),
                        WithNoFixture(ES2_D3D11()),
+                       WithNoFixture(ES2_METAL()),
                        WithNoFixture(ES2_OPENGL()),
+                       WithNoFixture(ES2_OPENGLES()),
                        WithNoFixture(ES2_VULKAN()));

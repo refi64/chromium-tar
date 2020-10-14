@@ -4,39 +4,23 @@
 
 #include "ash/public/cpp/ash_features.h"
 
-#include <vector>
-
 #include "ash/public/cpp/ash_switches.h"
 #include "base/command_line.h"
 #include "base/feature_list.h"
-#include "base/strings/string_split.h"
-#include "base/system/sys_info.h"
 #include "build/build_config.h"
 #include "chromeos/constants/chromeos_switches.h"
 
 namespace ash {
 namespace features {
 
-namespace {
-
-bool HideShelfControlButtonsEnabledForCurrentBoard() {
-  std::vector<std::string> board =
-      base::SplitString(base::SysInfo::GetLsbReleaseBoard(), "-",
-                        base::TRIM_WHITESPACE, base::SPLIT_WANT_NONEMPTY);
-  if (board.empty())
-    return false;
-  return board[0] == "kukui" || board[0] == "hatch" || board[0] == "eve" ||
-         board[0] == "meowth" || board[0] == "hana" || board[0] == "cyan" ||
-         board[0] == "scarlet";
-}
-
-}  // namespace
-
 const base::Feature kAllowAmbientEQ{"AllowAmbientEQ",
                                     base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kAutoNightLight{"AutoNightLight",
                                     base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kCaptureMode{"CaptureMode",
+                                 base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kContextualNudges{"ContextualNudges",
                                       base::FEATURE_ENABLED_BY_DEFAULT};
@@ -45,7 +29,7 @@ const base::Feature kDisplayAlignAssist{"DisplayAlignAssist",
                                         base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kDisplayIdentification{"DisplayIdentification",
-                                           base::FEATURE_DISABLED_BY_DEFAULT};
+                                           base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kDockedMagnifier{"DockedMagnifier",
                                      base::FEATURE_ENABLED_BY_DEFAULT};
@@ -53,17 +37,8 @@ const base::Feature kDockedMagnifier{"DockedMagnifier",
 const base::Feature kDragToSnapInClamshellMode{
     "DragToSnapInClamshellMode", base::FEATURE_ENABLED_BY_DEFAULT};
 
-const base::Feature kMovablePartialScreenshot{
-    "MovablePartialScreenshot", base::FEATURE_DISABLED_BY_DEFAULT};
-
-const base::Feature kEnableOverviewRoundedCorners{
-    "EnableOverviewRoundedCorners", base::FEATURE_ENABLED_BY_DEFAULT};
-
 const base::Feature kLimitAltTabToActiveDesk{"LimitAltTabToActiveDesk",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
-
-const base::Feature kPerDeskShelf{"PerDeskShelf",
-                                  base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kLockScreenNotifications{"LockScreenNotifications",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
@@ -87,6 +62,12 @@ const base::Feature kManagedDeviceUIRedesign{"ManagedDeviceUIRedesign",
 const base::Feature kMediaSessionNotification{"MediaSessionNotification",
                                               base::FEATURE_ENABLED_BY_DEFAULT};
 
+const base::Feature kMediaNotificationsCounter{
+    "MediaNotificationsCounter", base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kMovablePartialScreenshot{
+    "MovablePartialScreenshot", base::FEATURE_DISABLED_BY_DEFAULT};
+
 const base::Feature kMultiDisplayOverviewAndSplitView{
     "MultiDisplayOverviewAndSplitView", base::FEATURE_ENABLED_BY_DEFAULT};
 
@@ -100,6 +81,9 @@ const base::Feature kNotificationExperimentalShortTimeouts{
 
 const base::Feature kNotificationScrollBar{"NotificationScrollBar",
                                            base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kPerDeskShelf{"PerDeskShelf",
+                                  base::FEATURE_DISABLED_BY_DEFAULT};
 
 const base::Feature kPipRoundedCorners{"PipRoundedCorners",
                                        base::FEATURE_DISABLED_BY_DEFAULT};
@@ -116,27 +100,14 @@ const base::Feature kTrilinearFiltering{"TrilinearFiltering",
 const base::Feature kUseBluetoothSystemInAsh{"UseBluetoothSystemInAsh",
                                              base::FEATURE_DISABLED_BY_DEFAULT};
 
-const base::Feature kSupervisedUserDeprecationNotice{
-    "SupervisedUserDeprecationNotice", base::FEATURE_ENABLED_BY_DEFAULT};
-
 const base::Feature kSwapSideVolumeButtonsForOrientation{
     "SwapSideVolumeButtonsForOrientation", base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kEnableBackgroundBlur{"EnableBackgroundBlur",
                                           base::FEATURE_ENABLED_BY_DEFAULT};
 
-const base::Feature kSwipingFromLeftEdgeToGoBack{
-    "SwipingFromLeftEdgeToGoBack", base::FEATURE_ENABLED_BY_DEFAULT};
-
-const base::Feature kDragFromShelfToHomeOrOverview{
-    "DragFromShelfToHomeOrOverview", base::FEATURE_DISABLED_BY_DEFAULT};
-
 const base::Feature kHideShelfControlsInTabletMode{
-    "HideShelfControlsInTabletMode", base::FEATURE_DISABLED_BY_DEFAULT};
-
-const base::Feature kHideShelfControlsInTabletModeForAllowedBoards{
-    "HideShelfControlsInTabletModeForAllowedBoard",
-    base::FEATURE_ENABLED_BY_DEFAULT};
+    "HideShelfControlsInTabletMode", base::FEATURE_ENABLED_BY_DEFAULT};
 
 const base::Feature kSystemTrayMicGainSetting{"SystemTrayMicGainSetting",
                                               base::FEATURE_ENABLED_BY_DEFAULT};
@@ -154,6 +125,12 @@ const base::Feature kMaintainShelfStateWhenEnteringOverview{
     "MaintainShelfStateWhenEnteringOverview",
     base::FEATURE_DISABLED_BY_DEFAULT};
 
+const base::Feature kTemporaryHoldingSpace{"TemporaryHoldingSpace",
+                                           base::FEATURE_DISABLED_BY_DEFAULT};
+
+const base::Feature kDragUnpinnedAppToPin{"DragUnpinnedAppToPin",
+                                          base::FEATURE_DISABLED_BY_DEFAULT};
+
 bool IsAllowAmbientEQEnabled() {
   return base::FeatureList::IsEnabled(kAllowAmbientEQ);
 }
@@ -168,6 +145,10 @@ bool IsPerDeskShelfEnabled() {
 
 bool IsAutoNightLightEnabled() {
   return base::FeatureList::IsEnabled(kAutoNightLight);
+}
+
+bool IsCaptureModeEnabled() {
+  return base::FeatureList::IsEnabled(kCaptureMode);
 }
 
 bool IsHideArcMediaNotificationsEnabled() {
@@ -218,10 +199,6 @@ bool IsTrilinearFilteringEnabled() {
   return use_trilinear_filtering;
 }
 
-bool IsSupervisedUserDeprecationNoticeEnabled() {
-  return base::FeatureList::IsEnabled(kSupervisedUserDeprecationNotice);
-}
-
 bool IsSwapSideVolumeButtonsForOrientationEnabled() {
   return base::FeatureList::IsEnabled(kSwapSideVolumeButtonsForOrientation);
 }
@@ -240,16 +217,10 @@ bool IsBackgroundBlurEnabled() {
 #endif
 }
 
-bool IsSwipingFromLeftEdgeToGoBackEnabled() {
-  return base::FeatureList::IsEnabled(kSwipingFromLeftEdgeToGoBack);
-}
-
 bool IsDragFromShelfToHomeOrOverviewEnabled() {
   // The kDragFromShelfToHomeOrOverview feature is only enabled on the devices
-  // that have hotseat enabled (i.e., on Krane and on Dogfood devices) in M80.
-  // See crbug.com/1029991 for details.
-  return base::FeatureList::IsEnabled(kDragFromShelfToHomeOrOverview) ||
-         chromeos::switches::ShouldShowShelfHotseat();
+  // that have hotseat enabled.
+  return chromeos::switches::ShouldShowShelfHotseat();
 }
 
 bool IsReduceDisplayNotificationsEnabled() {
@@ -259,15 +230,6 @@ bool IsReduceDisplayNotificationsEnabled() {
 bool IsHideShelfControlsInTabletModeEnabled() {
   if (!IsDragFromShelfToHomeOrOverviewEnabled())
     return false;
-
-  // Use enabled by default feature it the current board is in the
-  // default-by-default allowlist.
-  static const bool enabled_for_board =
-      HideShelfControlButtonsEnabledForCurrentBoard();
-  if (enabled_for_board) {
-    return base::FeatureList::IsEnabled(
-        kHideShelfControlsInTabletModeForAllowedBoards);
-  }
 
   return base::FeatureList::IsEnabled(kHideShelfControlsInTabletMode);
 }
@@ -309,6 +271,14 @@ bool IsNotificationsInContextMenuEnabled() {
 
 bool IsMaintainShelfStateWhenEnteringOverviewEnabled() {
   return base::FeatureList::IsEnabled(kMaintainShelfStateWhenEnteringOverview);
+}
+
+bool IsTemporaryHoldingSpaceEnabled() {
+  return base::FeatureList::IsEnabled(kTemporaryHoldingSpace);
+}
+
+bool IsDragUnpinnedAppToPinEnabled() {
+  return base::FeatureList::IsEnabled(kDragUnpinnedAppToPin);
 }
 
 namespace {

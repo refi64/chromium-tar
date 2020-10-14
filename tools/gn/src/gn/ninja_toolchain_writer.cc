@@ -83,7 +83,8 @@ void NinjaToolchainWriter::WriteToolRule(Tool* tool,
   EscapeOptions options;
   options.mode = ESCAPE_NINJA_PREFORMATTED_COMMAND;
 
-  WriteCommandRulePattern("command", tool->command_launcher(), tool->command(), options);
+  WriteCommandRulePattern("command", tool->command_launcher(), tool->command(),
+                          options);
 
   WriteRulePattern("description", tool->description(), options);
   WriteRulePattern("rspfile", tool->rspfile(), options);
@@ -92,7 +93,7 @@ void NinjaToolchainWriter::WriteToolRule(Tool* tool,
   if (CTool* c_tool = tool->AsC()) {
     if (c_tool->depsformat() == CTool::DEPS_GCC) {
       // GCC-style deps require a depfile.
-      if (!tool->depfile().empty()) {
+      if (!c_tool->depfile().empty()) {
         WriteRulePattern("depfile", tool->depfile(), options);
         out_ << kIndent << "deps = gcc" << std::endl;
       }
@@ -132,8 +133,6 @@ void NinjaToolchainWriter::WriteCommandRulePattern(
     const SubstitutionPattern& command,
     const EscapeOptions& options) {
   CHECK(!command.empty()) << "Command should not be empty";
-  if (command.empty())
-    return;
   out_ << kIndent << name << " = " ;
   if (!launcher.empty())
     out_ << launcher << " ";

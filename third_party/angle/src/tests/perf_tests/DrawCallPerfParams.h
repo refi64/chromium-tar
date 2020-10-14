@@ -25,19 +25,10 @@ struct DrawCallPerfParams : public RenderTestParams
 
     double runTimeSeconds;
     int numTris;
-    bool offscreen;
 };
 
 namespace params
 {
-template <typename ParamsT>
-ParamsT D3D9(const ParamsT &in)
-{
-    ParamsT out       = in;
-    out.eglParameters = angle::egl_platform::D3D9();
-    return out;
-}
-
 template <typename ParamsT>
 ParamsT D3D11(const ParamsT &in)
 {

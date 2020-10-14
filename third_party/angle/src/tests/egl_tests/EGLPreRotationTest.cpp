@@ -17,11 +17,30 @@
 #include "util/EGLWindow.h"
 #include "util/OSWindow.h"
 #include "util/Timer.h"
+#include "util/test_utils.h"
 
 using namespace angle;
 
 namespace
 {
+
+using EGLPreRotationSurfaceTestParams = std::tuple<angle::PlatformParameters, bool>;
+
+std::string PrintToStringParamName(
+    const ::testing::TestParamInfo<EGLPreRotationSurfaceTestParams> &info)
+{
+    std::stringstream ss;
+    ss << std::get<0>(info.param);
+    if (std::get<1>(info.param))
+    {
+        ss << "__PreRotationEnabled";
+    }
+    else
+    {
+        ss << "__PreRotationDisabled";
+    }
+    return ss.str();
+}
 
 // A class to test various Android pre-rotation cases.  In order to make it easier to debug test
 // failures, the initial window size is 256x256, and each pixel will have a unique and predictable
@@ -33,7 +52,7 @@ namespace
 // Lower-right, which is ( 1.0,-1.0) & (256,   0) in GLES will be red    (0xFF, 0x00, 0x00, 0xFF)
 // Upper-left,  which is (-1.0, 1.0) & (  0, 256) in GLES will be green  (0x00, 0xFF, 0x00, 0xFF)
 // Upper-right, which is ( 1.0, 1.0) & (256, 256) in GLES will be yellow (0xFF, 0xFF, 0x00, 0xFF)
-class EGLPreRotationSurfaceTest : public ANGLETest
+class EGLPreRotationSurfaceTest : public ANGLETestWithParam<EGLPreRotationSurfaceTestParams>
 {
   protected:
     EGLPreRotationSurfaceTest()
@@ -81,10 +100,24 @@ class EGLPreRotationSurfaceTest : public ANGLETest
 
     void initializeDisplay()
     {
-        GLenum platformType = GetParam().getRenderer();
-        GLenum deviceType   = GetParam().getDeviceType();
+        const angle::PlatformParameters platform = ::testing::get<0>(GetParam());
+        GLenum platformType                      = platform.getRenderer();
+        GLenum deviceType                        = platform.getDeviceType();
 
-        std::vector<EGLint> displayAttributes;
+        std::vector<const char *> enabledFeatures;
+        std::vector<const char *> disabledFeatures;
+        if (::testing::get<1>(GetParam()))
+        {
+            enabledFeatures.push_back("enable_pre_rotation_surfaces");
+        }
+        else
+        {
+            disabledFeatures.push_back("enable_pre_rotation_surfaces");
+        }
+        enabledFeatures.push_back(nullptr);
+        disabledFeatures.push_back(nullptr);
+
+        std::vector<EGLAttrib> displayAttributes;
         displayAttributes.push_back(EGL_PLATFORM_ANGLE_TYPE_ANGLE);
         displayAttributes.push_back(platformType);
         displayAttributes.push_back(EGL_PLATFORM_ANGLE_MAX_VERSION_MAJOR_ANGLE);
@@ -93,11 +126,15 @@ class EGLPreRotationSurfaceTest : public ANGLETest
         displayAttributes.push_back(EGL_DONT_CARE);
         displayAttributes.push_back(EGL_PLATFORM_ANGLE_DEVICE_TYPE_ANGLE);
         displayAttributes.push_back(deviceType);
+        displayAttributes.push_back(EGL_FEATURE_OVERRIDES_ENABLED_ANGLE);
+        displayAttributes.push_back(reinterpret_cast<EGLAttrib>(enabledFeatures.data()));
+        displayAttributes.push_back(EGL_FEATURE_OVERRIDES_DISABLED_ANGLE);
+        displayAttributes.push_back(reinterpret_cast<EGLAttrib>(disabledFeatures.data()));
         displayAttributes.push_back(EGL_NONE);
 
-        mDisplay = eglGetPlatformDisplayEXT(EGL_PLATFORM_ANGLE_ANGLE,
-                                            reinterpret_cast<void *>(mOSWindow->getNativeDisplay()),
-                                            displayAttributes.data());
+        mDisplay = eglGetPlatformDisplay(EGL_PLATFORM_ANGLE_ANGLE,
+                                         reinterpret_cast<void *>(mOSWindow->getNativeDisplay()),
+                                         displayAttributes.data());
         ASSERT_TRUE(mDisplay != EGL_NO_DISPLAY);
 
         EGLint majorVersion, minorVersion;
@@ -109,7 +146,8 @@ class EGLPreRotationSurfaceTest : public ANGLETest
 
     void initializeContext()
     {
-        EGLint contextAttibutes[] = {EGL_CONTEXT_CLIENT_VERSION, GetParam().majorVersion, EGL_NONE};
+        EGLint contextAttibutes[] = {EGL_CONTEXT_CLIENT_VERSION,
+                                     ::testing::get<0>(GetParam()).majorVersion, EGL_NONE};
 
         mContext = eglCreateContext(mDisplay, mConfig, nullptr, contextAttibutes);
         ASSERT_EGL_SUCCESS();
@@ -442,6 +480,137 @@ TEST_P(EGLPreRotationSurfaceTest, OrientedWindowWithDerivativeDraw)
     EXPECT_PIXEL_COLOR_EQ((mSize / 2), (mSize / 2) - 1, expectedPixelLowerRight);
     EXPECT_PIXEL_COLOR_EQ((mSize / 2), (mSize / 2), expectedPixelUpperRight);
     ASSERT_GL_NO_ERROR();
+}
+
+// Android-specific test that changes a window's rotation, which requires ContextVk::syncState() to
+// handle the new rotation
+TEST_P(EGLPreRotationSurfaceTest, ChangeRotationWithDraw)
+{
+    // This test uses functionality that is only available on Android
+    ANGLE_SKIP_TEST_IF(isVulkanRenderer() && !IsAndroid());
+
+    // To aid in debugging, we want this window visible
+    setWindowVisible(mOSWindow, true);
+
+    initializeDisplay();
+    initializeSurfaceWithRGBA8888Config();
+
+    eglMakeCurrent(mDisplay, mWindowSurface, mWindowSurface, mContext);
+    ASSERT_EGL_SUCCESS();
+
+    // Init program
+    constexpr char kVS[] =
+        "attribute vec2 position;\n"
+        "attribute vec2 redGreen;\n"
+        "varying vec2 v_data;\n"
+        "void main() {\n"
+        "  gl_Position = vec4(position, 0, 1);\n"
+        "  v_data = redGreen;\n"
+        "}";
+
+    constexpr char kFS[] =
+        "varying highp vec2 v_data;\n"
+        "void main() {\n"
+        "  gl_FragColor = vec4(v_data, 0, 1);\n"
+        "}";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    ASSERT_NE(0u, program);
+    glUseProgram(program);
+
+    GLint positionLocation = glGetAttribLocation(program, "position");
+    ASSERT_NE(-1, positionLocation);
+
+    GLint redGreenLocation = glGetAttribLocation(program, "redGreen");
+    ASSERT_NE(-1, redGreenLocation);
+
+    GLuint indexBuffer;
+    glGenBuffers(1, &indexBuffer);
+
+    GLuint vertexArray;
+    glGenVertexArrays(1, &vertexArray);
+
+    std::vector<GLuint> vertexBuffers(2);
+    glGenBuffers(2, &vertexBuffers[0]);
+
+    glBindVertexArray(vertexArray);
+
+    std::vector<GLushort> indices = {0, 1, 2, 2, 3, 0};
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLushort) * indices.size(), &indices[0],
+                 GL_STATIC_DRAW);
+
+    std::vector<GLfloat> positionData = {// quad vertices
+                                         -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, -1.0f, 1.0f, 1.0f};
+
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffers[0]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * positionData.size(), &positionData[0],
+                 GL_STATIC_DRAW);
+    glVertexAttribPointer(positionLocation, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 2, nullptr);
+    glEnableVertexAttribArray(positionLocation);
+
+    std::vector<GLfloat> redGreenData = {// green(0,1), black(0,0), red(1,0), yellow(1,1)
+                                         0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 1.0f};
+
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffers[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * redGreenData.size(), &redGreenData[0],
+                 GL_STATIC_DRAW);
+    glVertexAttribPointer(redGreenLocation, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 2, nullptr);
+    glEnableVertexAttribArray(redGreenLocation);
+
+    ASSERT_GL_NO_ERROR();
+
+    // Change the rotation back and forth between landscape and portrait, and make sure that the
+    // drawing and reading happen consistently with the desired rotation.
+    for (int i = 0; i < 3; i++)
+    {
+        bool landscape;
+        EGLint actualWidth   = 0;
+        EGLint actualHeight  = 0;
+        EGLint desiredWidth  = 0;
+        EGLint desiredHeight = 0;
+        if ((i % 2) == 0)
+        {
+            landscape     = true;
+            desiredWidth  = 300;
+            desiredHeight = 200;
+        }
+        else
+        {
+            landscape     = false;
+            desiredWidth  = 200;
+            desiredHeight = 300;
+        }
+        mOSWindow->resize(desiredWidth, desiredHeight);
+        // setOrientation() uses a reverse-JNI call, which sends data to other parts of Android.
+        // Sometime later (i.e. asynchronously), the window is updated.  Sleep a little here, and
+        // then allow for multiple eglSwapBuffers calls to eventually see the new rotation.
+        mOSWindow->setOrientation(desiredWidth, desiredHeight);
+        angle::Sleep(1000);
+        eglSwapBuffers(mDisplay, mWindowSurface);
+        ASSERT_EGL_SUCCESS();
+
+        while ((actualWidth != desiredWidth) && (actualHeight != desiredHeight))
+        {
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
+            EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::black);
+            if (landscape)
+            {
+                EXPECT_PIXEL_COLOR_EQ(mSize - 1, 0, GLColor::red);
+            }
+            else
+            {
+                EXPECT_PIXEL_COLOR_EQ(0, mSize - 1, GLColor::green);
+            }
+            ASSERT_GL_NO_ERROR();
+
+            eglSwapBuffers(mDisplay, mWindowSurface);
+            ASSERT_EGL_SUCCESS();
+
+            eglQuerySurface(mDisplay, mWindowSurface, EGL_HEIGHT, &actualHeight);
+            eglQuerySurface(mDisplay, mWindowSurface, EGL_WIDTH, &actualWidth);
+        }
+    }
 }
 
 // A slight variation of EGLPreRotationSurfaceTest, where the initial window size is 400x300, yet
@@ -1582,12 +1751,26 @@ TEST_P(EGLPreRotationBlitFramebufferTest, FboDestOutOfBoundsSourceAndDestBlitFra
 }
 }  // anonymous namespace
 
-ANGLE_INSTANTIATE_TEST(EGLPreRotationSurfaceTest,
-                       WithNoFixture(ES2_VULKAN()),
-                       WithNoFixture(ES3_VULKAN()));
-ANGLE_INSTANTIATE_TEST(EGLPreRotationLargeSurfaceTest,
-                       WithNoFixture(ES2_VULKAN()),
-                       WithNoFixture(ES3_VULKAN()));
-ANGLE_INSTANTIATE_TEST(EGLPreRotationBlitFramebufferTest,
-                       WithNoFixture(ES2_VULKAN()),
-                       WithNoFixture(ES3_VULKAN()));
+#ifdef Bool
+// X11 ridiculousness.
+#    undef Bool
+#endif
+
+ANGLE_INSTANTIATE_TEST_COMBINE_1(EGLPreRotationSurfaceTest,
+                                 PrintToStringParamName,
+                                 testing::Bool(),
+                                 WithNoFixture(ES2_VULKAN()),
+                                 WithNoFixture(ES3_VULKAN()),
+                                 WithNoFixture(ES3_VULKAN_SWIFTSHADER()));
+ANGLE_INSTANTIATE_TEST_COMBINE_1(EGLPreRotationLargeSurfaceTest,
+                                 PrintToStringParamName,
+                                 testing::Bool(),
+                                 WithNoFixture(ES2_VULKAN()),
+                                 WithNoFixture(ES3_VULKAN()),
+                                 WithNoFixture(ES3_VULKAN_SWIFTSHADER()));
+ANGLE_INSTANTIATE_TEST_COMBINE_1(EGLPreRotationBlitFramebufferTest,
+                                 PrintToStringParamName,
+                                 testing::Bool(),
+                                 WithNoFixture(ES2_VULKAN()),
+                                 WithNoFixture(ES3_VULKAN()),
+                                 WithNoFixture(ES3_VULKAN_SWIFTSHADER()));

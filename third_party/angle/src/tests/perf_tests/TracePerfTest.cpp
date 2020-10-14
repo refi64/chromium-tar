@@ -13,7 +13,7 @@
 #include "tests/perf_tests/ANGLEPerfTest.h"
 #include "tests/perf_tests/DrawCallPerfParams.h"
 #include "util/egl_loader_autogen.h"
-#include "util/frame_capture_utils.h"
+#include "util/frame_capture_test_utils.h"
 #include "util/png_utils.h"
 
 #include "restricted_traces/restricted_traces_autogen.h"
@@ -27,8 +27,6 @@ using namespace egl_platform;
 
 namespace
 {
-void FramebufferChangeCallback(void *userData, GLenum target, GLuint framebuffer);
-
 struct TracePerfParams final : public RenderTestParams
 {
     // Common default options
@@ -36,7 +34,9 @@ struct TracePerfParams final : public RenderTestParams
     {
         majorVersion = 3;
         minorVersion = 0;
-        trackGpuTime = true;
+
+        // Tracking GPU time adds overhead to native traces. http://anglebug.com/4879
+        trackGpuTime = false;
 
         // Display the frame after every drawBenchmark invocation
         iterationsPerStep = 1;
@@ -45,7 +45,7 @@ struct TracePerfParams final : public RenderTestParams
     std::string story() const override
     {
         std::stringstream strstr;
-        strstr << RenderTestParams::story() << "_" << kTraceInfos[testID].name;
+        strstr << RenderTestParams::story() << "_" << GetTraceInfo(testID).name;
         return strstr.str();
     }
 
@@ -67,7 +67,7 @@ class TracePerfTest : public ANGLERenderTest, public ::testing::WithParamInterfa
     void destroyBenchmark() override;
     void drawBenchmark() override;
 
-    void onFramebufferChange(GLenum target, GLuint framebuffer);
+    void onReplayFramebufferChange(GLenum target, GLuint framebuffer);
 
     uint32_t mStartFrame;
     uint32_t mEndFrame;
@@ -97,7 +97,27 @@ class TracePerfTest : public ANGLERenderTest, public ::testing::WithParamInterfa
     std::vector<TimeSample> mTimeline;
 
     std::string mStartingDirectory;
+    bool mUseTimestampQueries = false;
 };
+
+class TracePerfTest;
+TracePerfTest *gCurrentTracePerfTest = nullptr;
+
+// Don't forget to include KHRONOS_APIENTRY in override methods. Neccessary on Win/x86.
+void KHRONOS_APIENTRY BindFramebufferProc(GLenum target, GLuint framebuffer)
+{
+    glBindFramebuffer(target, framebuffer);
+    gCurrentTracePerfTest->onReplayFramebufferChange(target, framebuffer);
+}
+
+angle::GenericProc KHRONOS_APIENTRY TraceLoadProc(const char *procName)
+{
+    if (strcmp(procName, "glBindFramebuffer") == 0)
+    {
+        return reinterpret_cast<angle::GenericProc>(BindFramebufferProc);
+    }
+    return gCurrentTracePerfTest->getGLWindow()->getProcAddress(procName);
+}
 
 TracePerfTest::TracePerfTest()
     : ANGLERenderTest("TracePerf", GetParam()), mStartFrame(0), mEndFrame(0)
@@ -118,8 +138,24 @@ TracePerfTest::TracePerfTest()
         mSkipTest = true;
     }
 
+    if (param.testID == RestrictedTraceID::cod_mobile)
+    {
+        // TODO: http://anglebug.com/4967 Vulkan: GL_EXT_color_buffer_float not supported on Pixel 2
+        // The COD:Mobile trace uses a framebuffer attachment with:
+        //   format = GL_RGB
+        //   type = GL_UNSIGNED_INT_10F_11F_11F_REV
+        // That combination is only renderable if GL_EXT_color_buffer_float is supported.
+        // It happens to not be supported on Pixel 2's Vulkan driver.
+        addExtensionPrerequisite("GL_EXT_color_buffer_float");
+
+        // TODO: http://anglebug.com/4731 This extension is missing on older Intel drivers.
+        addExtensionPrerequisite("GL_OES_EGL_image_external");
+    }
+
     // We already swap in TracePerfTest::drawBenchmark, no need to swap again in the harness.
     disableTestHarnessSwap();
+
+    gCurrentTracePerfTest = this;
 }
 
 void TracePerfTest::initializeBenchmark()
@@ -135,15 +171,25 @@ void TracePerfTest::initializeBenchmark()
         angle::SetCWD(exeDir.c_str());
     }
 
-    const TraceInfo &traceInfo = kTraceInfos[params.testID];
+    trace_angle::LoadGLES(TraceLoadProc);
+
+    const TraceInfo &traceInfo = GetTraceInfo(params.testID);
     mStartFrame                = traceInfo.startFrame;
     mEndFrame                  = traceInfo.endFrame;
     SetBinaryDataDecompressCallback(params.testID, DecompressBinaryData);
+
+    setStepsPerRunLoopStep(mEndFrame - mStartFrame + 1);
 
     std::stringstream testDataDirStr;
     testDataDirStr << ANGLE_TRACE_DATA_DIR << "/" << traceInfo.name;
     std::string testDataDir = testDataDirStr.str();
     SetBinaryDataDir(params.testID, testDataDir.c_str());
+
+    if (IsAndroid())
+    {
+        // On Android, set the orientation used by the app, based on width/height
+        getWindow()->setOrientation(mTestParams.windowWidth, mTestParams.windowHeight);
+    }
 
     // Potentially slow. Can load a lot of resources.
     SetupReplay(params.testID);
@@ -164,7 +210,7 @@ void TracePerfTest::destroyBenchmark()
 
 void TracePerfTest::sampleTime()
 {
-    if (mIsTimestampQueryAvailable)
+    if (mUseTimestampQueries)
     {
         GLint64 glTime;
         // glGetInteger64vEXT is exported by newer versions of the timer query extensions.
@@ -280,13 +326,13 @@ double TracePerfTest::getHostTimeFromGLTime(GLint64 glTime)
     return mTimeline[firstSampleIndex].hostTime + hostRange * t;
 }
 
-// Callback from the perf tests.
-void TracePerfTest::onFramebufferChange(GLenum target, GLuint framebuffer)
+// Triggered when the replay calls glBindFramebuffer.
+void TracePerfTest::onReplayFramebufferChange(GLenum target, GLuint framebuffer)
 {
-    if (!mIsTimestampQueryAvailable)
+    if (target != GL_FRAMEBUFFER && target != GL_DRAW_FRAMEBUFFER)
         return;
 
-    if (target != GL_FRAMEBUFFER && target != GL_DRAW_FRAMEBUFFER)
+    if (!mUseTimestampQueries)
         return;
 
     // We have at most one active timestamp query at a time. This code will end the current
@@ -310,7 +356,7 @@ void TracePerfTest::saveScreenshot(const std::string &screenshotName)
 {
     // Render a single frame.
     RestrictedTraceID testID   = GetParam().testID;
-    const TraceInfo &traceInfo = kTraceInfos[testID];
+    const TraceInfo &traceInfo = GetTraceInfo(testID);
     ReplayFrame(testID, traceInfo.startFrame);
 
     // RGBA 4-byte data.
@@ -345,11 +391,6 @@ void TracePerfTest::saveScreenshot(const std::string &screenshotName)
     glFinish();
 }
 
-ANGLE_MAYBE_UNUSED void FramebufferChangeCallback(void *userData, GLenum target, GLuint framebuffer)
-{
-    reinterpret_cast<TracePerfTest *>(userData)->onFramebufferChange(target, framebuffer);
-}
-
 TEST_P(TracePerfTest, Run)
 {
     run();
@@ -357,10 +398,12 @@ TEST_P(TracePerfTest, Run)
 
 TracePerfParams CombineTestID(const TracePerfParams &in, RestrictedTraceID id)
 {
+    const TraceInfo &traceInfo = GetTraceInfo(id);
+
     TracePerfParams out = in;
     out.testID          = id;
-    out.windowWidth     = kTraceInfos[id].drawSurfaceWidth;
-    out.windowHeight    = kTraceInfos[id].drawSurfaceHeight;
+    out.windowWidth     = traceInfo.drawSurfaceWidth;
+    out.windowHeight    = traceInfo.drawSurfaceHeight;
     return out;
 }
 
