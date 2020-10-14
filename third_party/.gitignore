@@ -43,7 +43,6 @@
 /bison
 /boringssl/src
 /bouncycastle/lib/
-/breakpad/breakpad
 /byte_buddy/android_sdk_build_tools_25_0_2
 /byte_buddy/lib/
 /cardboard-java/src
