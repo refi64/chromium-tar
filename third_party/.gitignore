@@ -24,7 +24,6 @@
 /android_tools_internal/
 /android_webview_glue/src
 /androidx/lib/
-/angle_dx11
 /apache-portable-runtime/src
 /apache-win32/bin/*.exe
 /apache-win32/bin/*.dll
@@ -43,6 +42,7 @@
 /bison
 /boringssl/src
 /bouncycastle/lib/
+/breakpad/breakpad
 /byte_buddy/android_sdk_build_tools_25_0_2
 /byte_buddy/lib/
 /cardboard-java/src
