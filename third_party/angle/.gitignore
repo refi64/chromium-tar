@@ -29,6 +29,7 @@
 .git_cl_description_backup
 /src/tests/third_party/gles_conformance_tests
 /testing
+/third_party/abseil-cpp
 /third_party/android_ndk
 /third_party/catapult
 /third_party/cherry
@@ -66,8 +67,11 @@
 /tools/flex-bison/windows/msys*.dll
 /tools/glslang/glslang_validator
 /tools/glslang/glslang_validator.exe
+/tools/luci-go
+/tools/mb
 /tools/md_browser
 /tools/memory
+/tools/skia_goldctl
 angle_debug.txt
 build
 buildtools/

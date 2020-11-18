@@ -107,7 +107,7 @@ class PLATFORM_EXPORT VideoCaptureImpl
   using ClientInfoMap = std::map<int, ClientInfo>;
 
   using BufferFinishedCallback =
-      base::OnceCallback<void(double consumer_resource_utilization)>;
+      base::OnceCallback<void(media::VideoFrameFeedback feedback)>;
 
   void OnVideoFrameReady(int32_t buffer_id,
                          base::TimeTicks reference_time,
@@ -118,7 +118,7 @@ class PLATFORM_EXPORT VideoCaptureImpl
   void OnAllClientsFinishedConsumingFrame(
       int buffer_id,
       scoped_refptr<BufferContext> buffer_context,
-      double consumer_resource_utilization);
+      media::VideoFrameFeedback feedback);
 
   void StopDevice();
   void RestartCapture();
@@ -142,7 +142,7 @@ class PLATFORM_EXPORT VideoCaptureImpl
   // RESOURCE_UTILIZATION value from the |metadata| and then runs the given
   // callback, to trampoline back to the IO thread with the values.
   static void DidFinishConsumingFrame(
-      const media::VideoFrameMetadata* metadata,
+      const media::VideoFrameFeedback* feedback,
       BufferFinishedCallback callback_to_io_thread);
 
   // Callback for when GPU context lost is detected. The method fetches the new
@@ -184,6 +184,8 @@ class PLATFORM_EXPORT VideoCaptureImpl
   base::TimeTicks first_frame_ref_time_;
 
   VideoCaptureState state_;
+
+  int num_first_frame_logs_ = 0;
 
   // Methods of |gpu_factories_| need to run on |media_task_runner_|.
   media::GpuVideoAcceleratorFactories* gpu_factories_ = nullptr;

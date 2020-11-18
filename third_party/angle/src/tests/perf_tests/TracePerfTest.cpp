@@ -120,7 +120,7 @@ angle::GenericProc KHRONOS_APIENTRY TraceLoadProc(const char *procName)
 }
 
 TracePerfTest::TracePerfTest()
-    : ANGLERenderTest("TracePerf", GetParam()), mStartFrame(0), mEndFrame(0)
+    : ANGLERenderTest("TracePerf", GetParam(), "ms"), mStartFrame(0), mEndFrame(0)
 {
     const TracePerfParams &param = GetParam();
 
@@ -244,6 +244,12 @@ void TracePerfTest::drawBenchmark()
         getGLWindow()->swap();
 
         endInternalTraceEvent(frameName);
+
+        // Check for abnormal exit.
+        if (!mRunning)
+        {
+            return;
+        }
     }
 
     ResetReplay(GetParam().testID);
@@ -379,14 +385,23 @@ void TracePerfTest::saveScreenshot(const std::string &screenshotName)
         }
     }
 
-    angle::SavePNGRGB(screenshotName.c_str(), "ANGLE Screenshot", mTestParams.windowWidth,
-                      mTestParams.windowHeight, rgbData);
+    if (!angle::SavePNGRGB(screenshotName.c_str(), "ANGLE Screenshot", mTestParams.windowWidth,
+                           mTestParams.windowHeight, rgbData))
+    {
+        FAIL() << "Error saving screenshot: " << screenshotName;
+    }
+    else
+    {
+        printf("Saved screenshot: '%s'\n", screenshotName.c_str());
+    }
 
     // Finish the frame loop.
-    for (uint32_t nextFrame = traceInfo.startFrame + 1; nextFrame < traceInfo.endFrame; ++nextFrame)
+    for (uint32_t nextFrame = traceInfo.startFrame + 1; nextFrame <= traceInfo.endFrame;
+         ++nextFrame)
     {
         ReplayFrame(testID, nextFrame);
     }
+    ResetReplay(testID);
     getGLWindow()->swap();
     glFinish();
 }
@@ -407,12 +422,19 @@ TracePerfParams CombineTestID(const TracePerfParams &in, RestrictedTraceID id)
     return out;
 }
 
+bool NoAndroidMockICD(const TracePerfParams &in)
+{
+    return in.eglParameters.deviceType != EGL_PLATFORM_ANGLE_DEVICE_TYPE_NULL_ANGLE || !IsAndroid();
+}
+
 using namespace params;
 using P = TracePerfParams;
 
 std::vector<P> gTestsWithID =
     CombineWithValues({P()}, AllEnums<RestrictedTraceID>(), CombineTestID);
-std::vector<P> gTestsWithRenderer = CombineWithFuncs(gTestsWithID, {Vulkan<P>, Native<P>});
-ANGLE_INSTANTIATE_TEST_ARRAY(TracePerfTest, gTestsWithRenderer);
+std::vector<P> gTestsWithRenderer =
+    CombineWithFuncs(gTestsWithID, {Vulkan<P>, VulkanMockICD<P>, Native<P>});
+std::vector<P> gTestsWithoutMockICD = FilterWithFunc(gTestsWithRenderer, NoAndroidMockICD);
+ANGLE_INSTANTIATE_TEST_ARRAY(TracePerfTest, gTestsWithoutMockICD);
 
 }  // anonymous namespace

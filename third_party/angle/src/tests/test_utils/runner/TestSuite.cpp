@@ -650,7 +650,14 @@ std::string GetConfigNameFromTestIdentifier(const TestIdentifier &id)
     size_t doubleUnderscorePos = id.testName.find("__");
     if (doubleUnderscorePos == std::string::npos)
     {
-        return id.testName.substr(slashPos + 1);
+        std::string configName = id.testName.substr(slashPos + 1);
+
+        if (!BeginsWith(configName, "ES"))
+        {
+            return "default";
+        }
+
+        return configName;
     }
     else
     {
@@ -805,7 +812,7 @@ TestSuite::TestSuite(int *argc, char **argv)
         ++argIndex;
     }
 
-    if ((mShardIndex >= 0) != (mShardCount > 1))
+    if ((mShardIndex == -1) != (mShardCount == -1))
     {
         printf("Shard index and shard count must be specified together.\n");
         exit(1);
@@ -836,7 +843,7 @@ TestSuite::TestSuite(int *argc, char **argv)
 
         if (mFilterString.substr(0, strlen("--gtest_filter=")) != std::string("--gtest_filter="))
         {
-            printf("Filter file must start with \"--gtest_filter=\".");
+            printf("Filter file must start with \"--gtest_filter=\".\n");
             exit(1);
         }
 
@@ -854,8 +861,28 @@ TestSuite::TestSuite(int *argc, char **argv)
 
     std::vector<TestIdentifier> testSet = GetFilteredTests(&mTestFileLines, alsoRunDisabledTests);
 
-    if (mShardCount > 0)
+    if (mShardCount == 0)
     {
+        printf("Shard count must be > 0.\n");
+        exit(1);
+    }
+    else if (mShardCount > 0)
+    {
+        if (mShardIndex >= mShardCount)
+        {
+            printf("Shard index must be less than shard count.\n");
+            exit(1);
+        }
+
+        if (!angle::GetEnvironmentVar("GTEST_SHARD_INDEX").empty() ||
+            !angle::GetEnvironmentVar("GTEST_TOTAL_SHARDS").empty())
+        {
+            printf(
+                "Error: --shard-index and --shard-count are incompatible with GTEST_SHARD_INDEX "
+                "and GTEST_TOTAL_SHARDS.\n");
+            exit(1);
+        }
+
         testSet =
             GetShardTests(testSet, mShardIndex, mShardCount, &mTestFileLines, alsoRunDisabledTests);
 
@@ -891,7 +918,8 @@ TestSuite::TestSuite(int *argc, char **argv)
             while (!mTestQueue.empty())
             {
                 const std::vector<TestIdentifier> &tests = mTestQueue.front();
-                std::cout << tests[0] << " (" << static_cast<int>(tests.size()) << ")\n";
+                std::cout << GetConfigNameFromTestIdentifier(tests[0]) << " ("
+                          << static_cast<int>(tests.size()) << ")\n";
                 mTestQueue.pop();
             }
 
@@ -922,9 +950,7 @@ TestSuite::TestSuite(int *argc, char **argv)
         listeners.Append(new TestEventListener(mResultsFile, mHistogramJsonFile,
                                                mTestSuiteName.c_str(), &mTestResults));
 
-        std::vector<TestIdentifier> testList = GetFilteredTests(nullptr, alsoRunDisabledTests);
-
-        for (const TestIdentifier &id : testList)
+        for (const TestIdentifier &id : testSet)
         {
             mTestResults.results[id].type = TestResultType::Skip;
         }
@@ -951,10 +977,10 @@ bool TestSuite::parseSingleArg(const char *argument)
             ParseIntArg("--batch-timeout=", argument, &mBatchTimeout) ||
             ParseStringArg("--results-directory=", argument, &mResultsDirectory) ||
             ParseStringArg(kResultFileArg, argument, &mResultsFile) ||
-            ParseStringArg("--isolated-script-test-output", argument, &mResultsFile) ||
+            ParseStringArg("--isolated-script-test-output=", argument, &mResultsFile) ||
             ParseStringArg(kFilterFileArg, argument, &mFilterFile) ||
             ParseStringArg(kHistogramJsonFileArg, argument, &mHistogramJsonFile) ||
-            ParseStringArg("--isolated-script-perf-test-output", argument, &mHistogramJsonFile) ||
+            ParseStringArg("--isolated-script-test-perf-output=", argument, &mHistogramJsonFile) ||
             ParseFlag("--bot-mode", argument, &mBotMode) ||
             ParseFlag("--debug-test-groups", argument, &mDebugTestGroups));
 }
@@ -1023,6 +1049,9 @@ bool TestSuite::launchChildTestProcess(const std::vector<TestIdentifier> &testsI
     args.push_back(filterFileArg.c_str());
     args.push_back(resultsFileArg.c_str());
 
+    // TODO(jmadill): Remove this once migrated. http://anglebug.com/3162
+    args.push_back("--reuse-displays");
+
     for (const std::string &arg : mGoogleTestCommandLineArgs)
     {
         args.push_back(arg.c_str());
@@ -1075,6 +1104,13 @@ bool TestSuite::finishProcess(ProcessInfo *processInfo)
         return false;
     }
 
+    if (!batchResults.results.empty())
+    {
+        const TestIdentifier &id = batchResults.results.begin()->first;
+        std::string config       = GetConfigNameFromTestIdentifier(id);
+        printf("Completed batch with config: %s\n", config.c_str());
+    }
+
     // Process results and print unexpected errors.
     for (const auto &resultIter : batchResults.results)
     {
@@ -1093,7 +1129,11 @@ bool TestSuite::finishProcess(ProcessInfo *processInfo)
 
         if (result.type == TestResultType::Pass)
         {
-            printf(" (%g ms)\n", result.elapsedTimeSeconds * 1000.0);
+            printf(" (%0.1lf ms)\n", result.elapsedTimeSeconds * 1000.0);
+        }
+        else if (result.type == TestResultType::Timeout)
+        {
+            printf(" (TIMEOUT in %0.1lf s)\n", result.elapsedTimeSeconds);
         }
         else
         {
@@ -1144,8 +1184,24 @@ int TestSuite::run()
     if (!mBotMode)
     {
         startWatchdog();
-        return RUN_ALL_TESTS();
+        int retVal = RUN_ALL_TESTS();
+
+        {
+            std::lock_guard<std::mutex> guard(mTestResults.currentTestMutex);
+            mTestResults.allDone = true;
+        }
+
+        for (int tries = 0; tries < 10; ++tries)
+        {
+            if (!mWatchdogThread.joinable())
+                break;
+            angle::Sleep(100);
+        }
+        return retVal;
     }
+
+    Timer totalRunTime;
+    totalRunTime.start();
 
     constexpr double kIdleMessageTimeout = 5.0;
 
@@ -1157,7 +1213,7 @@ int TestSuite::run()
         bool progress = false;
 
         // Spawn a process if needed and possible.
-        while (static_cast<int>(mCurrentProcesses.size()) < mMaxProcesses && !mTestQueue.empty())
+        if (static_cast<int>(mCurrentProcesses.size()) < mMaxProcesses && !mTestQueue.empty())
         {
             std::vector<TestIdentifier> testsInBatch = mTestQueue.front();
             mTestQueue.pop();
@@ -1223,13 +1279,16 @@ int TestSuite::run()
         }
 
         // Sleep briefly and continue.
-        angle::Sleep(10);
+        angle::Sleep(100);
     }
 
     // Dump combined results.
     WriteOutputFiles(true, mTestResults, mResultsFile, mHistogramJsonFile, mTestSuiteName.c_str());
 
-    return printFailuresAndReturnCount() == 0;
+    totalRunTime.stop();
+    printf("Tests completed in %lf seconds\n", totalRunTime.getElapsedTime());
+
+    return printFailuresAndReturnCount() == 0 ? 0 : 1;
 }
 
 int TestSuite::printFailuresAndReturnCount() const

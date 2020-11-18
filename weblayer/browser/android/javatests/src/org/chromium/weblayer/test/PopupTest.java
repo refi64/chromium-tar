@@ -55,7 +55,9 @@ public final class PopupTest {
         mActivityTestRule.executeScriptSync("window.open('about:blank')", true);
 
         // Make sure the infobar shows up and the popup has not been opened.
-        int buttonId = ResourceUtil.getIdentifier(mRemoteContext, "id/button_primary");
+        String packageName =
+                TestWebLayer.getWebLayerContext(mActivity.getApplicationContext()).getPackageName();
+        int buttonId = ResourceUtil.getIdentifier(mRemoteContext, "id/button_primary", packageName);
         CriteriaHelper.pollInstrumentationThread(() -> {
             Criteria.checkThat(mActivity.findViewById(buttonId), Matchers.notNullValue());
         });
@@ -79,9 +81,6 @@ public final class PopupTest {
                 tab.getBrowser().destroyTab(tab);
                 helper.notifyCalled();
             }
-            @Override
-            public void onCloseTab() {
-            }
         };
         TestThreadUtils.runOnUiThreadBlocking(
                 () -> { mActivity.getBrowser().getActiveTab().setNewTabCallback(callback); });
@@ -90,7 +89,9 @@ public final class PopupTest {
         mActivityTestRule.executeScriptSync("window.open('about:blank')", true);
 
         // Make sure the infobar shows up and the popup has not been opened.
-        int buttonId = ResourceUtil.getIdentifier(mRemoteContext, "id/button_primary");
+        String packageName =
+                TestWebLayer.getWebLayerContext(mActivity.getApplicationContext()).getPackageName();
+        int buttonId = ResourceUtil.getIdentifier(mRemoteContext, "id/button_primary", packageName);
         CriteriaHelper.pollInstrumentationThread(() -> {
             Criteria.checkThat(mActivity.findViewById(buttonId), Matchers.notNullValue());
         });

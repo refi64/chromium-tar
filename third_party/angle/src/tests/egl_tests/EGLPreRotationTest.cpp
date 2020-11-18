@@ -14,6 +14,7 @@
 #include "common/Color.h"
 #include "common/platform.h"
 #include "test_utils/ANGLETest.h"
+#include "test_utils/gl_raii.h"
 #include "util/EGLWindow.h"
 #include "util/OSWindow.h"
 #include "util/Timer.h"
@@ -183,6 +184,36 @@ class EGLPreRotationSurfaceTest : public ANGLETestWithParam<EGLPreRotationSurfac
         initializeContext();
     }
 
+    void initializeSurfaceWithRGBA8888d24s8Config()
+    {
+        const EGLint configAttributes[] = {
+            EGL_RED_SIZE,   8,  EGL_GREEN_SIZE,   8, EGL_BLUE_SIZE,      8, EGL_ALPHA_SIZE, 8,
+            EGL_DEPTH_SIZE, 24, EGL_STENCIL_SIZE, 8, EGL_SAMPLE_BUFFERS, 0, EGL_NONE};
+
+        EGLint configCount;
+        EGLConfig config;
+        ASSERT_TRUE(eglChooseConfig(mDisplay, configAttributes, &config, 1, &configCount) ||
+                    (configCount != 1) == EGL_TRUE);
+
+        mConfig = config;
+
+        EGLint surfaceType = EGL_NONE;
+        eglGetConfigAttrib(mDisplay, mConfig, EGL_SURFACE_TYPE, &surfaceType);
+
+        std::vector<EGLint> windowAttributes;
+        windowAttributes.push_back(EGL_NONE);
+
+        if (surfaceType & EGL_WINDOW_BIT)
+        {
+            // Create first window surface
+            mWindowSurface = eglCreateWindowSurface(mDisplay, mConfig, mOSWindow->getNativeWindow(),
+                                                    windowAttributes.data());
+            ASSERT_EGL_SUCCESS();
+        }
+
+        initializeContext();
+    }
+
     void testDrawingAndReadPixels()
     {
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, nullptr);
@@ -293,8 +324,7 @@ TEST_P(EGLPreRotationSurfaceTest, OrientedWindowWithDraw)
         "  gl_FragColor = vec4(v_data, 0, 1);\n"
         "}";
 
-    GLuint program = CompileProgram(kVS, kFS);
-    ASSERT_NE(0u, program);
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
     glUseProgram(program);
 
     GLint positionLocation = glGetAttribLocation(program, "position");
@@ -303,14 +333,9 @@ TEST_P(EGLPreRotationSurfaceTest, OrientedWindowWithDraw)
     GLint redGreenLocation = glGetAttribLocation(program, "redGreen");
     ASSERT_NE(-1, redGreenLocation);
 
-    GLuint indexBuffer;
-    glGenBuffers(1, &indexBuffer);
-
-    GLuint vertexArray;
-    glGenVertexArrays(1, &vertexArray);
-
-    std::vector<GLuint> vertexBuffers(2);
-    glGenBuffers(2, &vertexBuffers[0]);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
 
     glBindVertexArray(vertexArray);
 
@@ -388,8 +413,7 @@ TEST_P(EGLPreRotationSurfaceTest, OrientedWindowWithDerivativeDraw)
         "  FragColor = vec4(dFdx(v_data.x), dFdy(v_data.y), 0, 1);\n"
         "}";
 
-    GLuint program = CompileProgram(kVS, kFS);
-    ASSERT_NE(0u, program);
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
     glUseProgram(program);
 
     GLint positionLocation = glGetAttribLocation(program, "position");
@@ -398,14 +422,9 @@ TEST_P(EGLPreRotationSurfaceTest, OrientedWindowWithDerivativeDraw)
     GLint redGreenLocation = glGetAttribLocation(program, "redGreen");
     ASSERT_NE(-1, redGreenLocation);
 
-    GLuint indexBuffer;
-    glGenBuffers(1, &indexBuffer);
-
-    GLuint vertexArray;
-    glGenVertexArrays(1, &vertexArray);
-
-    std::vector<GLuint> vertexBuffers(2);
-    glGenBuffers(2, &vertexBuffers[0]);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
 
     glBindVertexArray(vertexArray);
 
@@ -514,8 +533,7 @@ TEST_P(EGLPreRotationSurfaceTest, ChangeRotationWithDraw)
         "  gl_FragColor = vec4(v_data, 0, 1);\n"
         "}";
 
-    GLuint program = CompileProgram(kVS, kFS);
-    ASSERT_NE(0u, program);
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
     glUseProgram(program);
 
     GLint positionLocation = glGetAttribLocation(program, "position");
@@ -524,14 +542,9 @@ TEST_P(EGLPreRotationSurfaceTest, ChangeRotationWithDraw)
     GLint redGreenLocation = glGetAttribLocation(program, "redGreen");
     ASSERT_NE(-1, redGreenLocation);
 
-    GLuint indexBuffer;
-    glGenBuffers(1, &indexBuffer);
-
-    GLuint vertexArray;
-    glGenVertexArrays(1, &vertexArray);
-
-    std::vector<GLuint> vertexBuffers(2);
-    glGenBuffers(2, &vertexBuffers[0]);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
 
     glBindVertexArray(vertexArray);
 
@@ -666,21 +679,15 @@ TEST_P(EGLPreRotationLargeSurfaceTest, OrientedWindowWithFragCoordDraw)
         "  gl_FragColor = vec4(gl_FragCoord.x / 256.0, gl_FragCoord.y / 256.0, 0.0, 1.0);\n"
         "}";
 
-    GLuint program = CompileProgram(kVS, kFS);
-    ASSERT_NE(0u, program);
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
     glUseProgram(program);
 
     GLint positionLocation = glGetAttribLocation(program, "position");
     ASSERT_NE(-1, positionLocation);
 
-    GLuint indexBuffer;
-    glGenBuffers(1, &indexBuffer);
-
-    GLuint vertexArray;
-    glGenVertexArrays(1, &vertexArray);
-
-    GLuint vertexBuffer;
-    glGenBuffers(1, &vertexBuffer);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffer;
 
     glBindVertexArray(vertexArray);
 
@@ -751,7 +758,10 @@ class EGLPreRotationBlitFramebufferTest : public EGLPreRotationLargeSurfaceTest
         return CompileProgram(kVS, kFS);
     }
 
-    void initializeGeometry(GLuint program)
+    void initializeGeometry(GLuint program,
+                            GLBuffer *indexBuffer,
+                            GLVertexArray *vertexArray,
+                            GLBuffer *vertexBuffers)
     {
         GLint positionLocation = glGetAttribLocation(program, "position");
         ASSERT_NE(-1, positionLocation);
@@ -759,19 +769,10 @@ class EGLPreRotationBlitFramebufferTest : public EGLPreRotationLargeSurfaceTest
         GLint redGreenLocation = glGetAttribLocation(program, "redGreen");
         ASSERT_NE(-1, redGreenLocation);
 
-        GLuint indexBuffer;
-        glGenBuffers(1, &indexBuffer);
-
-        GLuint vertexArray;
-        glGenVertexArrays(1, &vertexArray);
-
-        std::vector<GLuint> vertexBuffers(2);
-        glGenBuffers(2, &vertexBuffers[0]);
-
-        glBindVertexArray(vertexArray);
+        glBindVertexArray(*vertexArray);
 
         std::vector<GLushort> indices = {0, 1, 2, 2, 3, 0};
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, *indexBuffer);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLushort) * indices.size(), &indices[0],
                      GL_STATIC_DRAW);
 
@@ -796,14 +797,9 @@ class EGLPreRotationBlitFramebufferTest : public EGLPreRotationLargeSurfaceTest
         glEnableVertexAttribArray(redGreenLocation);
     }
 
-    GLuint createFBO()
+    void initializeFBO(GLFramebuffer *framebuffer, GLTexture *texture)
     {
-        GLuint framebuffer = 0;
-        GLuint texture     = 0;
-        glGenFramebuffers(1, &framebuffer);
-        glGenTextures(1, &texture);
-
-        glBindTexture(GL_TEXTURE_2D, texture);
+        glBindTexture(GL_TEXTURE_2D, *texture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -811,10 +807,8 @@ class EGLPreRotationBlitFramebufferTest : public EGLPreRotationLargeSurfaceTest
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, mSize, mSize, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                      nullptr);
 
-        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texture, 0);
-
-        return framebuffer;
+        glBindFramebuffer(GL_FRAMEBUFFER, *framebuffer);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, *texture, 0);
     }
 
     // Ensures that the correct colors are where they should be when the entire 256x256 pattern has
@@ -860,11 +854,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, BasicBlitFramebuffer)
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
@@ -923,6 +922,389 @@ TEST_P(EGLPreRotationBlitFramebufferTest, BasicBlitFramebuffer)
     ASSERT_EGL_SUCCESS();
 }
 
+// Blit the ms0 stencil buffer to the default framebuffer with rotation on android.
+TEST_P(EGLPreRotationBlitFramebufferTest, BlitStencilWithRotation)
+{
+    // http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(isVulkanRenderer() && IsLinux() && IsIntel());
+
+    // Flaky on Linux SwANGLE http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(IsLinux() && isSwiftshader());
+
+    setWindowVisible(mOSWindow, true);
+
+    initializeDisplay();
+    initializeSurfaceWithRGBA8888d24s8Config();
+
+    eglMakeCurrent(mDisplay, mWindowSurface, mWindowSurface, mContext);
+    ASSERT_EGL_SUCCESS();
+
+    mOSWindow->setOrientation(300, 400);
+    angle::Sleep(1000);
+    eglSwapBuffers(mDisplay, mWindowSurface);
+    ASSERT_EGL_SUCCESS();
+
+    GLRenderbuffer colorbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, colorbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 0, GL_RGBA8, 64, 128);
+
+    GLRenderbuffer depthstencilbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, depthstencilbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 0, GL_DEPTH24_STENCIL8, 64, 128);
+
+    GLFramebuffer framebuffer;
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.get());
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorbuf);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
+                              depthstencilbuf);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
+                              depthstencilbuf);
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // Replace stencil to 1.
+    ANGLE_GL_PROGRAM(drawRed, essl3_shaders::vs::Simple(), essl3_shaders::fs::Red());
+    glEnable(GL_STENCIL_TEST);
+    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+    glStencilFunc(GL_ALWAYS, 1, 255);
+    drawQuad(drawRed.get(), essl3_shaders::PositionAttrib(), 0.8f);
+
+    // Blit stencil buffer to default frambuffer.
+    GLenum attachments1[] = {GL_COLOR_ATTACHMENT0};
+    glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, attachments1);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0, 0, 64, 128, 0, 0, 64, 128, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+                      GL_NEAREST);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    ANGLE_GL_PROGRAM(drawGreen, essl3_shaders::vs::Simple(), essl3_shaders::fs::Green());
+    glDisable(GL_STENCIL_TEST);
+    drawQuad(drawGreen.get(), essl3_shaders::PositionAttrib(), 0.5f);
+
+    // Draw blue color if the stencil is equal to 1.
+    // If the blit finished successfully, the stencil test should all pass.
+    ANGLE_GL_PROGRAM(drawBlue, essl3_shaders::vs::Simple(), essl3_shaders::fs::Blue());
+    glEnable(GL_STENCIL_TEST);
+    glStencilFunc(GL_EQUAL, 1, 255);
+    drawQuad(drawBlue.get(), essl3_shaders::PositionAttrib(), 0.3f);
+
+    // Check the result, especially the boundaries.
+    EXPECT_PIXEL_COLOR_EQ(0, 127, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(32, 127, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(32, 0, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(63, 0, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(63, 1, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(63, 64, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(32, 64, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(63, 127, GLColor::blue);
+
+    // Some pixels around x=0 still fail on android.There are other issues to fix.
+    // From the image in the window, the failures near one of the image's edge look like "aliasing".
+    // We need to fix blit with pre-rotation. http://anglebug.com/5044
+    // EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::blue);
+    // EXPECT_PIXEL_COLOR_EQ(0, 64, GLColor::blue);
+
+    eglSwapBuffers(mDisplay, mWindowSurface);
+
+    ASSERT_GL_NO_ERROR();
+}
+
+// Blit the multisample stencil buffer to the default framebuffer with rotation on android.
+TEST_P(EGLPreRotationBlitFramebufferTest, BlitMultisampleStencilWithRotation)
+{
+    // http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(isVulkanRenderer() && IsLinux() && IsIntel());
+
+    // Flaky on Linux SwANGLE http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(IsLinux() && isSwiftshader());
+
+    setWindowVisible(mOSWindow, true);
+
+    initializeDisplay();
+    initializeSurfaceWithRGBA8888d24s8Config();
+
+    eglMakeCurrent(mDisplay, mWindowSurface, mWindowSurface, mContext);
+    ASSERT_EGL_SUCCESS();
+
+    mOSWindow->setOrientation(300, 400);
+    angle::Sleep(1000);
+    eglSwapBuffers(mDisplay, mWindowSurface);
+    ASSERT_EGL_SUCCESS();
+
+    GLRenderbuffer colorbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, colorbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGBA8, 128, 64);
+
+    GLRenderbuffer depthstencilbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, depthstencilbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, 128, 64);
+
+    GLFramebuffer framebuffer;
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.get());
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorbuf);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
+                              depthstencilbuf);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
+                              depthstencilbuf);
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // Replace stencil to 1.
+    ANGLE_GL_PROGRAM(drawRed, essl3_shaders::vs::Simple(), essl3_shaders::fs::Red());
+    glEnable(GL_STENCIL_TEST);
+    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+    glStencilFunc(GL_ALWAYS, 1, 255);
+    drawQuad(drawRed.get(), essl3_shaders::PositionAttrib(), 0.8f);
+
+    // Blit multisample stencil buffer to default frambuffer.
+    GLenum attachments1[] = {GL_COLOR_ATTACHMENT0};
+    glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, attachments1);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0, 0, 128, 64, 0, 0, 128, 64, GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+                      GL_NEAREST);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    ANGLE_GL_PROGRAM(drawGreen, essl3_shaders::vs::Simple(), essl3_shaders::fs::Green());
+    glDisable(GL_STENCIL_TEST);
+    drawQuad(drawGreen.get(), essl3_shaders::PositionAttrib(), 0.5f);
+
+    // Draw blue color if the stencil is equal to 1.
+    // If the blit finished successfully, the stencil test should all pass.
+    ANGLE_GL_PROGRAM(drawBlue, essl3_shaders::vs::Simple(), essl3_shaders::fs::Blue());
+    glEnable(GL_STENCIL_TEST);
+    glStencilFunc(GL_EQUAL, 1, 255);
+    drawQuad(drawBlue.get(), essl3_shaders::PositionAttrib(), 0.3f);
+
+    // Check the result, especially the boundaries.
+    EXPECT_PIXEL_COLOR_EQ(64, 0, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(127, 0, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(127, 1, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(127, 32, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(64, 32, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(0, 63, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(64, 63, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(127, 63, GLColor::blue);
+
+    // Some pixels around x=0 still fail on android.There are other issues to fix.
+    // We need to fix blit with pre-rotation. http://anglebug.com/5044
+    // EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::blue);
+    // EXPECT_PIXEL_COLOR_EQ(0, 32, GLColor::blue);
+
+    eglSwapBuffers(mDisplay, mWindowSurface);
+
+    ASSERT_GL_NO_ERROR();
+}
+
+// Blit stencil to default framebuffer with flip and prerotation.
+TEST_P(EGLPreRotationBlitFramebufferTest, BlitStencilWithFlip)
+{
+    // http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(isVulkanRenderer() && IsLinux() && IsIntel());
+
+    // Flaky on Linux SwANGLE http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(IsLinux() && isSwiftshader());
+
+    // We need to fix blit with pre-rotation. http://anglebug.com/5044
+    ANGLE_SKIP_TEST_IF(IsAndroid() || IsWindows());
+
+    // To aid in debugging, we want this window visible
+    setWindowVisible(mOSWindow, true);
+
+    initializeDisplay();
+    initializeSurfaceWithRGBA8888d24s8Config();
+
+    eglMakeCurrent(mDisplay, mWindowSurface, mWindowSurface, mContext);
+    ASSERT_EGL_SUCCESS();
+
+    mOSWindow->setOrientation(300, 400);
+    angle::Sleep(1000);
+    eglSwapBuffers(mDisplay, mWindowSurface);
+    ASSERT_EGL_SUCCESS();
+
+    constexpr int kSize = 128;
+    glViewport(0, 0, kSize, kSize);
+
+    GLRenderbuffer colorbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, colorbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 0, GL_RGBA8, kSize, kSize);
+
+    GLRenderbuffer depthstencilbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, depthstencilbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 0, GL_DEPTH24_STENCIL8, kSize, kSize);
+
+    GLFramebuffer framebuffer;
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.get());
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorbuf);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
+                              depthstencilbuf);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER,
+                              depthstencilbuf);
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    // Replace stencil to 1.
+    ANGLE_GL_PROGRAM(drawRed, essl3_shaders::vs::Simple(), essl3_shaders::fs::Red());
+    glEnable(GL_STENCIL_TEST);
+    glStencilOp(GL_REPLACE, GL_REPLACE, GL_REPLACE);
+    glStencilFunc(GL_ALWAYS, 1, 255);
+    drawQuad(drawRed.get(), essl3_shaders::PositionAttrib(), 0.8f);
+
+    // Blit stencil buffer to default frambuffer with X-flip.
+    GLenum attachments1[] = {GL_COLOR_ATTACHMENT0};
+    glInvalidateFramebuffer(GL_FRAMEBUFFER, 1, attachments1);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0, 0, kSize, kSize, kSize, 0, 0, kSize,
+                      GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    ANGLE_GL_PROGRAM(drawGreen, essl3_shaders::vs::Simple(), essl3_shaders::fs::Green());
+    glDisable(GL_STENCIL_TEST);
+    drawQuad(drawGreen.get(), essl3_shaders::PositionAttrib(), 0.5f);
+
+    // Draw blue color if the stencil is equal to 1.
+    // If the blit finished successfully, the stencil test should all pass.
+    glEnable(GL_STENCIL_TEST);
+    glStencilFunc(GL_EQUAL, 1, 255);
+    ANGLE_GL_PROGRAM(gradientProgram, essl31_shaders::vs::Passthrough(),
+                     essl31_shaders::fs::RedGreenGradient());
+    drawQuad(gradientProgram, essl31_shaders::PositionAttrib(), 0.5f, 1.0f, true);
+
+    // Check the result, especially the boundaries.
+    EXPECT_PIXEL_NEAR(0, 0, 0, 0, 0, 255, 1.0);                      // Black
+    EXPECT_PIXEL_NEAR(kSize - 1, 0, 253, 0, 0, 255, 1.0);            // Red
+    EXPECT_PIXEL_NEAR(0, kSize - 1, 0, 253, 0, 255, 1.0);            // Green
+    EXPECT_PIXEL_NEAR(kSize - 1, kSize - 1, 253, 253, 0, 255, 1.0);  // Yellow
+
+    eglSwapBuffers(mDisplay, mWindowSurface);
+
+    ASSERT_GL_NO_ERROR();
+}
+
+// Blit color buffer to default framebuffer with flip and prerotation.
+TEST_P(EGLPreRotationBlitFramebufferTest, BlitColorWithFlip)
+{
+    // http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(isVulkanRenderer() && IsLinux() && IsIntel());
+
+    // Flaky on Linux SwANGLE http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(IsLinux() && isSwiftshader());
+
+    // We need to fix blit with pre-rotation. http://anglebug.com/5044
+    ANGLE_SKIP_TEST_IF(IsAndroid());
+
+    // To aid in debugging, we want this window visible
+    setWindowVisible(mOSWindow, true);
+
+    initializeDisplay();
+    initializeSurfaceWithRGBA8888Config();
+
+    eglMakeCurrent(mDisplay, mWindowSurface, mWindowSurface, mContext);
+    ASSERT_EGL_SUCCESS();
+
+    mOSWindow->setOrientation(300, 400);
+    angle::Sleep(1000);
+    eglSwapBuffers(mDisplay, mWindowSurface);
+    ASSERT_EGL_SUCCESS();
+
+    constexpr int kSize = 128;
+    glViewport(0, 0, kSize, kSize);
+
+    GLRenderbuffer colorbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, colorbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 0, GL_RGBA8, kSize, kSize);
+
+    GLFramebuffer framebuffer;
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.get());
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorbuf);
+
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    ANGLE_GL_PROGRAM(gradientProgram, essl31_shaders::vs::Passthrough(),
+                     essl31_shaders::fs::RedGreenGradient());
+    drawQuad(gradientProgram, essl31_shaders::PositionAttrib(), 0.5f, 1.0f, true);
+
+    // Blit color buffer to default frambuffer with Y-flip.
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0, 0, kSize, kSize, 0, kSize, kSize, 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    // Check the result, especially the boundaries.
+    EXPECT_PIXEL_NEAR(0, 0, 0, 253, 0, 255, 1.0);                  // Green
+    EXPECT_PIXEL_NEAR(kSize - 1, 0, 253, 253, 0, 255, 1.0);        // Yellow
+    EXPECT_PIXEL_NEAR(0, kSize - 1, 0, 0, 0, 255, 1.0);            // Balck
+    EXPECT_PIXEL_NEAR(kSize - 1, kSize - 1, 253, 0, 0, 255, 1.0);  // Red
+
+    eglSwapBuffers(mDisplay, mWindowSurface);
+
+    ASSERT_GL_NO_ERROR();
+}
+
+// Blit color buffer to default framebuffer with linear filter.
+TEST_P(EGLPreRotationBlitFramebufferTest, BlitColorWithLinearFilter)
+{
+    // http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(isVulkanRenderer() && IsLinux() && IsIntel());
+
+    // Flaky on Linux SwANGLE http://anglebug.com/4453
+    ANGLE_SKIP_TEST_IF(IsLinux() && isSwiftshader());
+
+    setWindowVisible(mOSWindow, true);
+
+    initializeDisplay();
+    initializeSurfaceWithRGBA8888Config();
+
+    eglMakeCurrent(mDisplay, mWindowSurface, mWindowSurface, mContext);
+    ASSERT_EGL_SUCCESS();
+
+    mOSWindow->setOrientation(300, 400);
+    angle::Sleep(1000);
+    eglSwapBuffers(mDisplay, mWindowSurface);
+    ASSERT_EGL_SUCCESS();
+
+    constexpr int kSize = 128;
+    glViewport(0, 0, kSize, kSize);
+
+    GLRenderbuffer colorbuf;
+    glBindRenderbuffer(GL_RENDERBUFFER, colorbuf.get());
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 0, GL_RGBA8, kSize, kSize);
+
+    GLFramebuffer framebuffer;
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer.get());
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorbuf);
+
+    glCheckFramebufferStatus(GL_FRAMEBUFFER);
+
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    ANGLE_GL_PROGRAM(gradientProgram, essl31_shaders::vs::Passthrough(),
+                     essl31_shaders::fs::RedGreenGradient());
+    drawQuad(gradientProgram, essl31_shaders::PositionAttrib(), 0.5f, 1.0f, true);
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glBlitFramebuffer(0, 0, kSize, kSize, 0, 0, kSize, kSize, GL_COLOR_BUFFER_BIT, GL_LINEAR);
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+
+    // Check the result, especially the boundaries.
+    EXPECT_PIXEL_NEAR(0, 0, 0, 0, 0, 255, 1.0);                      // Black
+    EXPECT_PIXEL_NEAR(kSize - 1, 0, 253, 0, 0, 255, 1.0);            // Red
+    EXPECT_PIXEL_NEAR(0, kSize - 1, 0, 253, 0, 255, 1.0);            // Green
+    EXPECT_PIXEL_NEAR(kSize - 1, kSize - 1, 253, 253, 0, 255, 1.0);  // Yellow
+
+    eglSwapBuffers(mDisplay, mWindowSurface);
+
+    ASSERT_GL_NO_ERROR();
+}
+
 // Draw a predictable pattern (for testing pre-rotation) into an FBO, and then use glBlitFramebuffer
 // to blit the left and right halves of that pattern into various places within the 400x300 window
 TEST_P(EGLPreRotationBlitFramebufferTest, LeftAndRightBlitFramebuffer)
@@ -947,11 +1329,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, LeftAndRightBlitFramebuffer)
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
@@ -1060,11 +1447,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, TopAndBottomBlitFramebuffer)
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
@@ -1174,11 +1566,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, ScaledBlitFramebuffer)
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
@@ -1292,11 +1689,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, FboDestBlitFramebuffer)
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
@@ -1378,11 +1780,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, FboDestOutOfBoundsSourceBlitFramebuffe
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
@@ -1530,11 +1937,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, FboDestOutOfBoundsSourceWithStretchBli
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
@@ -1649,11 +2061,16 @@ TEST_P(EGLPreRotationBlitFramebufferTest, FboDestOutOfBoundsSourceAndDestBlitFra
     ASSERT_NE(0u, program);
     glUseProgram(program);
 
-    initializeGeometry(program);
+    GLBuffer indexBuffer;
+    GLVertexArray vertexArray;
+    GLBuffer vertexBuffers[2];
+    initializeGeometry(program, &indexBuffer, &vertexArray, vertexBuffers);
     ASSERT_GL_NO_ERROR();
 
     // Create a texture-backed FBO and render the predictable pattern to it
-    GLuint fbo = createFBO();
+    GLFramebuffer fbo;
+    GLTexture texture;
+    initializeFBO(&fbo, &texture);
     ASSERT_GL_NO_ERROR();
 
     glViewport(0, 0, mSize, mSize);
