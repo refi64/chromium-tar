@@ -12,14 +12,16 @@
 
 class RenderViewContextMenuProxy;
 namespace ui {
-class ClipboardDataEndpoint;
+class DataTransferEndpoint;
 }
 
 // A class that implements the menu item for copying selected text and a link
 // to the selected text to the user's clipboard.
 class CopyLinkToTextMenuObserver : public RenderViewContextMenuObserver {
  public:
-  explicit CopyLinkToTextMenuObserver(RenderViewContextMenuProxy* proxy);
+  static std::unique_ptr<CopyLinkToTextMenuObserver> Create(
+      RenderViewContextMenuProxy* proxy);
+
   CopyLinkToTextMenuObserver(const CopyLinkToTextMenuObserver&) = delete;
   CopyLinkToTextMenuObserver& operator=(const CopyLinkToTextMenuObserver&) =
       delete;
@@ -31,13 +33,14 @@ class CopyLinkToTextMenuObserver : public RenderViewContextMenuObserver {
   bool IsCommandIdEnabled(int command_id) override;
   void ExecuteCommand(int command_id) override;
 
-  void OnGeneratedSelector(std::unique_ptr<ui::ClipboardDataEndpoint> endpoint,
+  void OnGeneratedSelector(std::unique_ptr<ui::DataTransferEndpoint> endpoint,
                            const std::string& selector);
   // Convenience method for overriding the generated selector to bypass making
   // calls to the remote interface during tests.
   void OverrideGeneratedSelectorForTesting(const std::string& selector);
 
  private:
+  explicit CopyLinkToTextMenuObserver(RenderViewContextMenuProxy* proxy);
   mojo::Remote<blink::mojom::TextFragmentSelectorProducer> remote_;
   RenderViewContextMenuProxy* proxy_;
   GURL url_;

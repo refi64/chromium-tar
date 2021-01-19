@@ -29,11 +29,25 @@
 #    endif
 #endif  // !defined(ANGLE_TRACE_EXPORT)
 
+#if !defined(ANGLE_TRACE_LOADER_EXPORT)
+#    if defined(_WIN32)
+#        if defined(ANGLE_TRACE_LOADER_IMPLEMENTATION)
+#            define ANGLE_TRACE_LOADER_EXPORT __declspec(dllexport)
+#        else
+#            define ANGLE_TRACE_LOADER_EXPORT __declspec(dllimport)
+#        endif
+#    elif defined(__GNUC__)
+#        define ANGLE_TRACE_LOADER_EXPORT __attribute__((visibility("default")))
+#    else
+#        define ANGLE_TRACE_LOADER_EXPORT
+#    endif
+#endif  // !defined(ANGLE_TRACE_LOADER_EXPORT)
+
 namespace trace_angle
 {
 using GenericProc = void (*)();
 using LoadProc    = GenericProc(KHRONOS_APIENTRY *)(const char *);
-ANGLE_TRACE_EXPORT void LoadGLES(LoadProc loadProc);
+ANGLE_TRACE_LOADER_EXPORT void LoadGLES(LoadProc loadProc);
 }  // namespace trace_angle
 
 namespace angle
@@ -41,15 +55,24 @@ namespace angle
 enum class RestrictedTraceID
 {
     angry_birds_2_1500,
+    arena_of_valor,
+    brawl_stars,
     candy_crush_500,
+    clash_of_clans,
     cod_mobile,
+    dragon_ball_legends,
     egypt_1500,
+    fate_grand_order,
+    free_fire,
+    kartrider_rush,
     manhattan_10,
+    marvel_contest_of_champions,
     mobile_legends,
     nba2k20_800,
-    subway_surfer_500,
+    pubg_mobile_lite,
     temple_run_300,
     trex_200,
+    world_of_tanks_blitz,
     InvalidEnum,
     EnumCount = InvalidEnum
 };

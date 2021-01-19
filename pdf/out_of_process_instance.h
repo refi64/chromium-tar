@@ -36,6 +36,8 @@ class Vector2d;
 namespace pp {
 class Size;
 class TextInput_Dev;
+class VarArray;
+class VarDictionary;
 }  // namespace pp
 
 namespace chrome_pdf {
@@ -161,6 +163,9 @@ class OutOfProcessInstance : public PdfViewPluginBase,
   void EnteredEditMode() override;
   float GetToolbarHeightInScreenCoords() override;
   void DocumentFocusChanged(bool document_has_focus) override;
+  void SetSelectedText(const std::string& selected_text) override;
+  void SetLinkUnderCursor(const std::string& link_under_cursor) override;
+  bool IsValidLink(const std::string& url) override;
 
   // PreviewModeClient::Client:
   void PreviewDocumentLoadComplete() override;
@@ -355,6 +360,8 @@ class OutOfProcessInstance : public PdfViewPluginBase,
   // Size of entire document in pixels (i.e. if each page is 800 pixels high and
   // there are 10 pages, the height will be 8000).
   pp::Size document_size_;
+  // Positional offset, in CSS pixels, of the plugin rectangle.
+  pp::Point plugin_offset_;
   // The scroll offset in CSS pixels.
   pp::Point scroll_offset_;
 

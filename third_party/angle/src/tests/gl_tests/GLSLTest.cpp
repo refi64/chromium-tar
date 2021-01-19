@@ -824,6 +824,10 @@ TEST_P(GLSLTest_ES3, GLVertexIDIntegerTextureDrawArrays)
 {
     // http://anglebug.com/4092
     ANGLE_SKIP_TEST_IF(isSwiftshader());
+    // http://anglebug.com/5232
+    ANGLE_SKIP_TEST_IF(IsMetal());
+    // TODO(crbug.com/1132295): Failing on ARM-based Apple DTKs.
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
     // Have to set a large point size because the window size is much larger than the texture
     constexpr char kVS[] = R"(#version 300 es
 flat out highp int vVertexID;
@@ -1559,6 +1563,9 @@ TEST_P(GLSLTest, MaxVaryingVec3AndOneFloat)
 // Only fails on D3D9 because of packing limitations.
 TEST_P(GLSLTest, MaxVaryingVec3ArrayAndOneFloatArray)
 {
+    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsMetal());
+
     GLint maxVaryings = 0;
     glGetIntegerv(GL_MAX_VARYING_VECTORS, &maxVaryings);
 
@@ -1593,6 +1600,9 @@ TEST_P(GLSLTest, MaxVaryingVec2Arrays)
     // TODO(geofflang): Find out why this doesn't compile on Apple AMD OpenGL drivers
     // (http://anglebug.com/1291)
     ANGLE_SKIP_TEST_IF(IsOSX() && IsAMD() && IsOpenGL());
+
+    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsMetal());
 
     GLint maxVaryings = 0;
     glGetIntegerv(GL_MAX_VARYING_VECTORS, &maxVaryings);
@@ -2391,7 +2401,7 @@ TEST_P(GLSLTest_ES3, LargeNumberOfFloat4Parameters)
 {
     std::stringstream vertexShaderStream;
     // Note: SPIR-V doesn't allow more than 255 parameters to a function.
-    const unsigned int paramCount = IsVulkan() ? 255u : 1024u;
+    const unsigned int paramCount = (IsVulkan() || IsMetal()) ? 255u : 1024u;
 
     vertexShaderStream << "#version 300 es\n"
                           "precision highp float;\n"
@@ -2672,6 +2682,9 @@ TEST_P(GLSLTest_ES3, AtanVec2)
 // Convers a bug with the unary minus operator on signed integer workaround.
 TEST_P(GLSLTest_ES3, UnaryMinusOperatorSignedInt)
 {
+    // http://anglebug.com/5242
+    ANGLE_SKIP_TEST_IF(IsMetal() && IsIntel());
+
     constexpr char kVS[] =
         "#version 300 es\n"
         "in highp vec4 position;\n"
@@ -2719,6 +2732,9 @@ TEST_P(GLSLTest_ES3, UnaryMinusOperatorSignedInt)
 // Convers a bug with the unary minus operator on unsigned integer workaround.
 TEST_P(GLSLTest_ES3, UnaryMinusOperatorUnsignedInt)
 {
+    // http://anglebug.com/5242
+    ANGLE_SKIP_TEST_IF(IsMetal() && IsIntel());
+
     constexpr char kVS[] =
         "#version 300 es\n"
         "in highp vec4 position;\n"
@@ -3764,7 +3780,7 @@ TEST_P(GLSLTest_ES31, ArrayStructArrayArraySampler)
         {
             for (int k = 0; k < 2; k++)
             {
-                for (size_t l = 0; l < 2; l++)
+                for (int l = 0; l < 2; l++)
                 {
                     // First generate the texture
                     int textureUnit = l + 2 * (k + 2 * (j + 2 * i));
@@ -3854,7 +3870,7 @@ TEST_P(GLSLTest_ES31, ComplexStructArraySampler)
                 GLTexture *array   = arrays[k];
                 size_t arrayLength = arrayLengths[k];
                 size_t arrayOffset = arrayOffsets[k];
-                for (size_t l = 0; l < arrayLength; l++)
+                for (int l = 0; l < static_cast<int>(arrayLength); l++)
                 {
                     // First generate the texture
                     int textureUnit = arrayOffset + l + totalArrayLength * (j + 3 * i);
@@ -5402,6 +5418,9 @@ TEST_P(GLSLTest, NestedStructsWithSamplersAsFunctionArg)
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
     ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
 
+    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
+
     const char kFragmentShader[] = R"(precision mediump float;
 struct S { sampler2D samplerMember; };
 struct T { S nest; };
@@ -5505,6 +5524,9 @@ TEST_P(GLSLTest, NestedCompoundStructsWithSamplersAsFunctionArg)
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
     ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
 
+    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
+
     const char kFragmentShader[] = R"(precision mediump float;
 struct S { sampler2D samplerMember; bool b; };
 struct T { S nest; bool b; };
@@ -5569,6 +5591,9 @@ TEST_P(GLSLTest, MoreNestedCompoundStructsWithSamplersAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
     ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+
+    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
 
     const char kFragmentShader[] = R"(precision mediump float;
 struct S { bool b; sampler2D samplerMember; };
@@ -8669,6 +8694,65 @@ void main() {
 
     GLuint program = CompileProgram(kVS, kFS);
     EXPECT_NE(0u, program);
+}
+
+// Verify that precision match validation of uniforms is performed only if they are statically used
+TEST_P(GLSLTest_ES31, UniformPrecisionMatchValidation)
+{
+    // Nvidia driver bug: http://anglebug.com/5240
+    ANGLE_SKIP_TEST_IF(IsOpenGL() && IsWindows() && IsNVIDIA());
+
+    constexpr char kVSUnused[] = R"(#version 300 es
+precision highp float;
+uniform highp vec4 positionIn;
+
+void main()
+{
+    gl_Position = vec4(1, 0, 0, 1);
+})";
+
+    constexpr char kVSStaticUse[] = R"(#version 300 es
+precision highp float;
+uniform highp vec4 positionIn;
+
+void main()
+{
+    gl_Position = positionIn;
+})";
+
+    constexpr char kFSUnused[] = R"(#version 300 es
+precision highp float;
+uniform highp vec4 positionIn;
+out vec4 my_FragColor;
+
+void main()
+{
+    my_FragColor = vec4(1, 0, 0, 1);
+})";
+
+    constexpr char kFSStaticUse[] = R"(#version 300 es
+precision highp float;
+uniform mediump vec4 positionIn;
+out vec4 my_FragColor;
+
+void main()
+{
+    my_FragColor = vec4(1, 0, 0, positionIn.z);
+})";
+
+    GLuint program = 0;
+
+    program = CompileProgram(kVSUnused, kFSUnused);
+    EXPECT_NE(0u, program);
+
+    program = CompileProgram(kVSUnused, kFSStaticUse);
+    EXPECT_NE(0u, program);
+
+    program = CompileProgram(kVSStaticUse, kFSUnused);
+    EXPECT_NE(0u, program);
+
+    program = CompileProgram(kVSStaticUse, kFSStaticUse);
+    EXPECT_EQ(0u, program);
 }
 }  // anonymous namespace
 

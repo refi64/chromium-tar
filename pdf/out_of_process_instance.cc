@@ -28,6 +28,7 @@
 #include "base/strings/string_util.h"
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
+#include "build/chromeos_buildflags.h"
 #include "net/base/escape.h"
 #include "net/base/filename_util.h"
 #include "pdf/accessibility.h"
@@ -703,10 +704,12 @@ void OutOfProcessInstance::DidChangeView(const pp::View& view) {
   pp::Size view_device_size(view_rect.width() * device_scale,
                             view_rect.height() * device_scale);
 
-  if (view_device_size != plugin_size_ || device_scale != device_scale_) {
+  if (view_device_size != plugin_size_ || device_scale != device_scale_ ||
+      view_rect.point() != plugin_offset_) {
     device_scale_ = device_scale;
     plugin_dip_size_ = view_rect.size();
     plugin_size_ = view_device_size;
+    plugin_offset_ = view_rect.point();
 
     paint_manager_.SetSize(SizeFromPPSize(view_device_size), device_scale_);
 
@@ -837,8 +840,9 @@ void OutOfProcessInstance::SendNextAccessibilityPage(int32_t page_index) {
 
 void OutOfProcessInstance::SendAccessibilityViewportInfo() {
   PP_PrivateAccessibilityViewportInfo viewport_info;
-  viewport_info.scroll.x = 0;
-  viewport_info.scroll.y = -top_toolbar_height_in_viewport_coords_;
+  viewport_info.scroll.x = -plugin_offset_.x();
+  viewport_info.scroll.y =
+      -top_toolbar_height_in_viewport_coords_ - plugin_offset_.y();
   viewport_info.offset.x =
       available_area_.point().x() / (device_scale_ * zoom_);
   viewport_info.offset.y =
@@ -1395,7 +1399,7 @@ void OutOfProcessInstance::SaveToBuffer(const std::string& token) {
       message.Set(kJSDataToSave, buffer);
     }
   } else {
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_ASH)
     uint32_t length = engine()->GetLoadedByteSize();
     if (IsSaveDataSizeValid(length)) {
       pp::VarArrayBuffer buffer(length);
@@ -1405,7 +1409,7 @@ void OutOfProcessInstance::SaveToBuffer(const std::string& token) {
     }
 #else
     NOTREACHED();
-#endif
+#endif  // BUILDFLAG(IS_ASH)
   }
 
   PostMessage(message);
@@ -2189,6 +2193,19 @@ void OutOfProcessInstance::DocumentFocusChanged(bool document_has_focus) {
   PostMessage(message);
 }
 
+void OutOfProcessInstance::SetSelectedText(const std::string& selected_text) {
+  pp::PDF::SetSelectedText(this, selected_text.c_str());
+}
+
+void OutOfProcessInstance::SetLinkUnderCursor(
+    const std::string& link_under_cursor) {
+  pp::PDF::SetLinkUnderCursor(this, link_under_cursor.c_str());
+}
+
+bool OutOfProcessInstance::IsValidLink(const std::string& url) {
+  return pp::Var(url).is_string();
+}
+
 void OutOfProcessInstance::ProcessPreviewPageInfo(const std::string& url,
                                                   int dest_page_index) {
   DCHECK(IsPrintPreview());
@@ -2254,8 +2271,9 @@ void OutOfProcessInstance::SendDocumentMetadata() {
 
   metadata_message.Set(pp::Var(kJSAttachments), GetDocumentAttachments());
 
-  pp::VarArray bookmarks = engine()->GetBookmarks();
-  metadata_message.Set(pp::Var(kJSBookmarks), bookmarks);
+  base::Value bookmarks = engine()->GetBookmarks();
+  DCHECK(bookmarks.is_list());
+  metadata_message.Set(pp::Var(kJSBookmarks), VarFromValue(bookmarks));
 
   metadata_message.Set(
       pp::Var(kJSCanSerializeDocument),

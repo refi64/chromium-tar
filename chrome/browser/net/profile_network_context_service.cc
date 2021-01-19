@@ -70,6 +70,7 @@
 #include "chrome/browser/chromeos/policy/policy_cert_service_factory.h"
 #include "chrome/browser/chromeos/profiles/profile_helper.h"
 #include "chrome/browser/policy/profile_policy_connector.h"
+#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/constants/chromeos_switches.h"
 #include "components/user_manager/user.h"
 #include "components/user_manager/user_manager.h"
@@ -132,17 +133,14 @@ network::mojom::AdditionalCertificatesPtr GetAdditionalCertificates(
 
 // Tests allowing ambient authentication with default credentials based on the
 // profile type.
-// TODO(https://crbug.com/458508): Currently, this is determined by OR of the
-// feature flag and policy. Next steps would be changing the feature value to
-// false after enough heads up and then removing the feature.
 bool IsAmbientAuthAllowedForProfile(Profile* profile) {
-  if (profile->IsRegularProfile())
+  if (profile->IsRegularProfile() && !profile->IsEphemeralGuestProfile())
     return true;
 
   // Non-primary OTR profiles are not used to create browser windows and are
   // only technical means for a task that does not need to leave state after
   // it's completed.
-  if (!profile->IsPrimaryOTRProfile())
+  if (profile->IsOffTheRecord() && !profile->IsPrimaryOTRProfile())
     return true;
 
   PrefService* local_state = g_browser_process->local_state();
@@ -154,17 +152,17 @@ bool IsAmbientAuthAllowedForProfile(Profile* profile) {
       static_cast<net::AmbientAuthAllowedProfileTypes>(local_state->GetInteger(
           prefs::kAmbientAuthenticationInPrivateModesEnabled));
 
-  if (profile->IsGuestSession()) {
-    return base::FeatureList::IsEnabled(
-               features::kEnableAmbientAuthenticationInGuestSession) ||
-           type == net::AmbientAuthAllowedProfileTypes::GUEST_AND_REGULAR ||
+  if (profile->IsGuestSession() || profile->IsEphemeralGuestProfile()) {
+    return type == net::AmbientAuthAllowedProfileTypes::GUEST_AND_REGULAR ||
            type == net::AmbientAuthAllowedProfileTypes::ALL;
   } else if (profile->IsIncognitoProfile()) {
-    return base::FeatureList::IsEnabled(
-               features::kEnableAmbientAuthenticationInIncognito) ||
-           type == net::AmbientAuthAllowedProfileTypes::INCOGNITO_AND_REGULAR ||
+    return type == net::AmbientAuthAllowedProfileTypes::INCOGNITO_AND_REGULAR ||
            type == net::AmbientAuthAllowedProfileTypes::ALL;
   }
+
+  // System profile does not need ambient authentication.
+  if (profile->IsSystemProfile())
+    return false;
 
   // Profile type not yet supported.
   NOTREACHED();
@@ -175,7 +173,7 @@ bool IsAmbientAuthAllowedForProfile(Profile* profile) {
 void UpdateCookieSettings(Profile* profile) {
   ContentSettingsForOneType settings;
   HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
-      ContentSettingsType::COOKIES, std::string(), &settings);
+      ContentSettingsType::COOKIES, &settings);
   content::BrowserContext::ForEachStoragePartition(
       profile, base::BindRepeating(
                    [](ContentSettingsForOneType settings,
@@ -189,7 +187,7 @@ void UpdateCookieSettings(Profile* profile) {
 void UpdateLegacyCookieSettings(Profile* profile) {
   ContentSettingsForOneType settings;
   HostContentSettingsMapFactory::GetForProfile(profile)->GetSettingsForOneType(
-      ContentSettingsType::LEGACY_COOKIE_ACCESS, std::string(), &settings);
+      ContentSettingsType::LEGACY_COOKIE_ACCESS, &settings);
   content::BrowserContext::ForEachStoragePartition(
       profile, base::BindRepeating(
                    [](ContentSettingsForOneType settings,
@@ -204,8 +202,7 @@ void UpdateStorageAccessSettings(Profile* profile) {
   if (base::FeatureList::IsEnabled(blink::features::kStorageAccessAPI)) {
     ContentSettingsForOneType settings;
     HostContentSettingsMapFactory::GetForProfile(profile)
-        ->GetSettingsForOneType(ContentSettingsType::STORAGE_ACCESS,
-                                std::string(), &settings);
+        ->GetSettingsForOneType(ContentSettingsType::STORAGE_ACCESS, &settings);
 
     content::BrowserContext::ForEachStoragePartition(
         profile, base::BindRepeating(
@@ -499,12 +496,12 @@ ProfileNetworkContextService::CreateCookieManagerParams(
   HostContentSettingsMap* host_content_settings_map =
       HostContentSettingsMapFactory::GetForProfile(profile);
   host_content_settings_map->GetSettingsForOneType(ContentSettingsType::COOKIES,
-                                                   std::string(), &settings);
+                                                   &settings);
   out->settings = std::move(settings);
 
   ContentSettingsForOneType settings_for_legacy_cookie_access;
   host_content_settings_map->GetSettingsForOneType(
-      ContentSettingsType::LEGACY_COOKIE_ACCESS, std::string(),
+      ContentSettingsType::LEGACY_COOKIE_ACCESS,
       &settings_for_legacy_cookie_access);
   out->settings_for_legacy_cookie_access =
       std::move(settings_for_legacy_cookie_access);
@@ -512,8 +509,7 @@ ProfileNetworkContextService::CreateCookieManagerParams(
   ContentSettingsForOneType settings_for_storage_access;
   if (base::FeatureList::IsEnabled(blink::features::kStorageAccessAPI)) {
     host_content_settings_map->GetSettingsForOneType(
-        ContentSettingsType::STORAGE_ACCESS, std::string(),
-        &settings_for_storage_access);
+        ContentSettingsType::STORAGE_ACCESS, &settings_for_storage_access);
   }
   out->settings_for_storage_access = std::move(settings_for_storage_access);
 
@@ -833,6 +829,13 @@ void ProfileNetworkContextService::ConfigureNetworkContextParamsInternal(
         GetAdditionalCertificates(policy_cert_service,
                                   GetPartitionPath(relative_partition_path));
   }
+  // Disable idle sockets close on memory pressure if configured by finch or
+  // about://flags.
+  if (base::FeatureList::IsEnabled(
+          chromeos::features::kDisableIdleSocketsCloseOnMemoryPressure)) {
+    network_context_params->disable_idle_sockets_close_on_memory_pressure =
+        true;
+  }
 #endif
 
   // Should be initialized with existing per-profile CORS access lists.
@@ -863,8 +866,7 @@ base::FilePath ProfileNetworkContextService::GetPartitionPath(
 void ProfileNetworkContextService::OnContentSettingChanged(
     const ContentSettingsPattern& primary_pattern,
     const ContentSettingsPattern& secondary_pattern,
-    ContentSettingsType content_type,
-    const std::string& resource_identifier) {
+    ContentSettingsType content_type) {
   switch (content_type) {
     case ContentSettingsType::COOKIES:
       UpdateCookieSettings(profile_);

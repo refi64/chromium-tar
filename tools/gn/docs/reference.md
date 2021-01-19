@@ -57,7 +57,7 @@
     *   [rebase_path: Rebase a file or directory to another location.](#func_rebase_path)
     *   [set_default_toolchain: Sets the default toolchain name.](#func_set_default_toolchain)
     *   [set_defaults: Set default values for a target type.](#func_set_defaults)
-    *   [set_sources_assignment_filter: Set a pattern to filter source files.](#func_set_sources_assignment_filter)
+    *   [set_sources_assignment_filter: Deprecated feature.](#func_set_sources_assignment_filter)
     *   [split_list: Splits a list into N different sub-lists.](#func_split_list)
     *   [string_join: Concatenates a list of strings with a separator.](#func_string_join)
     *   [string_replace: Replaces substring in the given string.](#func_string_replace)
@@ -786,7 +786,7 @@
       This string is passed without any quoting to the ninja invocation
       command-line. Can be used to configure ninja flags, like "-j".
 
-  --root-target=<target_name>
+  --ide-root-target=<target_name>
       Name of the target corresponding to "All" target in Xcode. If unset,
       "All" invokes ninja without any target and builds everything.
 ```
@@ -794,7 +794,7 @@
 #### **QtCreator Flags**
 
 ```
-  --root-target=<target_name>
+  --ide-root-target=<target_name>
       Name of the root target for which the QtCreator project will be generated
       to contain files of it and its dependencies. If unset, the whole build
       graph will be emitted.
@@ -999,7 +999,7 @@
       target and all of its dependency tree, rebasing the strings in the `files`
       key onto the source directory of the target's declaration relative to "/".
 ```
-### <a name="cmd_outputs"></a>**gn outputs &lt;out_dir&gt; &lt;list of target or file names...&gt; ***
+### <a name="cmd_outputs"></a>**gn outputs &lt;out_dir&gt; &lt;list of target or file names...&gt;**
 
 ```
   Lists the output files corresponding to the given target(s) or file name(s).
@@ -2424,10 +2424,6 @@
   important because most targets have an implicit configs list, which means it
   wouldn't work at all if it didn't clobber).
 
-  The sources assignment filter (see "gn help set_sources_assignment_filter")
-  is never applied by this function. It's assumed than any desired filtering
-  was already done when sources was set on the from_scope.
-
   If variables_to_not_forward_list is non-empty, then it must contains a list
   of variable names that will not be forwarded. This is mostly useful when
   variable_list_or_star has a value of "*".
@@ -3055,36 +3051,11 @@
     configs -= [ "//tools/mything:settings" ]
   }
 ```
-### <a name="func_set_sources_assignment_filter"></a>**set_sources_assignment_filter**: Set a pattern to filter source files.
+### <a name="func_set_sources_assignment_filter"></a>**set_sources_assignment_filter**: Deprecated feature.
 
 ```
-  The sources assignment filter is a list of patterns that remove files from
-  the list implicitly whenever the "sources" variable is assigned to. This will
-  do nothing for non-lists.
-
-  This is intended to be used to globally filter out files with
-  platform-specific naming schemes when they don't apply, for example you may
-  want to filter out all "*_win.cc" files on non-Windows platforms.
-
-  Typically this will be called once in the master build config script to set
-  up the filter for the current platform. Subsequent calls will overwrite the
-  previous values.
-
-  If you want to bypass the filter and add a file even if it might be filtered
-  out, call set_sources_assignment_filter([]) to clear the list of filters.
-  This will apply until the current scope exits.
-
-  See "gn help file_pattern" for more information on file pattern.
-```
-
-#### **Sources assignment example**
-
-```
-  # Filter out all _win files.
-  set_sources_assignment_filter([ "*_win.cc", "*_win.h" ])
-  sources = [ "a.cc", "b_win.cc" ]
-  print(sources)
-  # Will print [ "a.cc" ]. b_win one was filtered out.
+  This feature is deprecated. It will be removed once all usages have been
+  removed. Only supports a single argument that needs to be an empty list.
 ```
 ### <a name="func_split_list"></a>**split_list**: Splits a list into N different sub-lists.
 
@@ -7078,10 +7049,6 @@
 
     mylist = []
     mylist = otherlist
-
-  When assigning to a list named 'sources' using '=' or '+=', list items may be
-  automatically filtered out. See "gn help set_sources_assignment_filter" for
-  more.
 ```
 
 #### **Scopes**

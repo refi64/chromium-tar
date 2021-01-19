@@ -74,6 +74,10 @@ class StatusBubble;
 class TabStripModel;
 class TabStripModelDelegate;
 
+namespace blink {
+enum class ProtocolHandlerSecurityLevel;
+}
+
 namespace chrome {
 class BrowserCommandController;
 }
@@ -182,6 +186,14 @@ class Browser : public TabStripModelObserver,
   // See WarnBeforeClosingCallback and WarnBeforeClosing() below.
   enum class WarnBeforeClosingResult { kOkToClose, kDoNotClose };
 
+  // Represents the result of a browser creation request.
+  enum class BrowserCreationStatus {
+    kOk,
+    kErrorNoProcess,
+    kErrorProfileUnsuitable,
+    kErrorLoadingKiosk,
+  };
+
   // Callback that receives the result of a user being warned about closing a
   // browser window (for example, if closing the window would interrupt a
   // download). The parameter is whether the close should proceed.
@@ -274,7 +286,7 @@ class Browser : public TabStripModelObserver,
   // Constructors, Creation, Showing //////////////////////////////////////////
 
   // Creates a browser instance with the provided params.
-  // Returns nullptr if the requested browser creation is not allowed.
+  // Crashes if the requested browser creation is not allowed.
   // For example, browser creation will not be allowed for profiles that
   // disallow browsing (like sign-in profile on Chrome OS).
   //
@@ -286,10 +298,10 @@ class Browser : public TabStripModelObserver,
   // caller is expected to take the ownership of the created Browser instance.
   static Browser* Create(const CreateParams& params);
 
-  // DEPRECATED in favor of Create().
-  // TODO(tbarzic): Make the constructor non-public once browser construction
-  // instances are replaced with Create(). https://crbug.com/916859.
-  explicit Browser(const CreateParams& params);
+  // Returns whether a browser window can be created for the specified profile.
+  static BrowserCreationStatus GetBrowserCreationStatusForProfile(
+      Profile* profile);
+
   ~Browser() override;
 
   // Set overrides for the initial window bounds and maximized state.
@@ -588,13 +600,6 @@ class Browser : public TabStripModelObserver,
   blink::SecurityStyle GetSecurityStyle(
       content::WebContents* web_contents,
       content::SecurityStyleExplanations* security_style_explanations) override;
-  std::unique_ptr<content::BluetoothChooser> RunBluetoothChooser(
-      content::RenderFrameHost* frame,
-      const content::BluetoothChooser::EventHandler& event_handler) override;
-  std::unique_ptr<content::BluetoothScanningPrompt> ShowBluetoothScanningPrompt(
-      content::RenderFrameHost* frame,
-      const content::BluetoothScanningPrompt::EventHandler& event_handler)
-      override;
   void CreateSmsPrompt(content::RenderFrameHost*,
                        const url::Origin&,
                        const std::string& one_time_code,
@@ -684,7 +689,6 @@ class Browser : public TabStripModelObserver,
   FRIEND_TEST_ALL_PREFIXES(AppModeTest, EnableAppModeTest);
   FRIEND_TEST_ALL_PREFIXES(BrowserCommandControllerTest,
                            IsReservedCommandOrKeyIsApp);
-  FRIEND_TEST_ALL_PREFIXES(BrowserCloseTest, LastGuest);
   FRIEND_TEST_ALL_PREFIXES(BrowserCloseTest, LastIncognito);
   FRIEND_TEST_ALL_PREFIXES(BrowserCloseTest, LastRegular);
   FRIEND_TEST_ALL_PREFIXES(BrowserCommandControllerTest, AppFullScreen);
@@ -694,6 +698,7 @@ class Browser : public TabStripModelObserver,
                            DenyExitsFullscreen);
   FRIEND_TEST_ALL_PREFIXES(ExclusiveAccessTest,
                            TabEntersPresentationModeFromWindowed);
+  FRIEND_TEST_ALL_PREFIXES(GuestBrowserCloseTest, LastGuest);
   FRIEND_TEST_ALL_PREFIXES(StartupBrowserCreatorTest, OpenAppShortcutNoPref);
   FRIEND_TEST_ALL_PREFIXES(StartupBrowserCreatorTest,
                            OpenAppShortcutWindowPref);
@@ -733,6 +738,8 @@ class Browser : public TabStripModelObserver,
     // screen. Only used on Mac.
     BOOKMARK_BAR_STATE_CHANGE_TOOLBAR_OPTION_CHANGE,
   };
+
+  explicit Browser(const CreateParams& params);
 
   // Overridden from content::WebContentsDelegate:
   content::WebContents* OpenURLFromTab(
@@ -816,7 +823,6 @@ class Browser : public TabStripModelObserver,
   void EnumerateDirectory(content::WebContents* web_contents,
                           scoped_refptr<content::FileSelectListener> listener,
                           const base::FilePath& path) override;
-  bool EmbedsFullscreenWidget() override;
   void EnterFullscreenModeForTab(
       content::RenderFrameHost* requesting_frame,
       const blink::mojom::FullscreenOptions& options) override;
@@ -825,6 +831,8 @@ class Browser : public TabStripModelObserver,
       const content::WebContents* web_contents) override;
   blink::mojom::DisplayMode GetDisplayMode(
       const content::WebContents* web_contents) override;
+  blink::ProtocolHandlerSecurityLevel GetProtocolHandlerSecurityLevel(
+      content::RenderFrameHost* requesting_frame) override;
   void RegisterProtocolHandler(content::RenderFrameHost* requesting_frame,
                                const std::string& protocol,
                                const GURL& url,

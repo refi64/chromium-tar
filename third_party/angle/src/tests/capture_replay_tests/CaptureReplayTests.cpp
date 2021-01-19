@@ -29,7 +29,7 @@
 // This will expand to "angle_capture_context<#>.h"
 #include ANGLE_MACRO_STRINGIZE(ANGLE_CAPTURE_REPLAY_COMPOSITE_TESTS_HEADER)
 
-const std::string resultTag = "*RESULT";
+constexpr char kResultTag[] = "*RESULT";
 
 class CaptureReplayTests
 {
@@ -127,7 +127,7 @@ class CaptureReplayTests
                 cleanupTest();
                 return -1;
             }
-            bool isEqual = compareSerializedStates(testIndex, frame, bos);
+            bool isEqual = compareSerializedContexts(testIndex, frame, bos.getData());
             if (!isEqual)
             {
                 cleanupTest();
@@ -144,18 +144,20 @@ class CaptureReplayTests
         for (size_t i = 0; i < testTraceInfos.size(); i++)
         {
             int result = runTest(static_cast<uint32_t>(i), testTraceInfos[i]);
-            std::cout << resultTag << " " << testTraceInfos[i].testName << " " << result << "\n";
+            std::cout << kResultTag << " " << testTraceInfos[i].testName << " " << result << "\n";
         }
         return 0;
     }
 
   private:
-    bool compareSerializedStates(uint32_t testIndex,
-                                 uint32_t frame,
-                                 const gl::BinaryOutputStream &replaySerializedContextData)
+    bool compareSerializedContexts(uint32_t testIndex,
+                                   uint32_t frame,
+                                   const std::vector<uint8_t> &replaySerializedContextState)
     {
-        return GetSerializedContextStateData(testIndex, frame) ==
-               replaySerializedContextData.getData();
+
+        return memcmp(replaySerializedContextState.data(),
+                      GetSerializedContextState(testIndex, frame),
+                      replaySerializedContextState.size()) == 0;
     }
 
     OSWindow *mOSWindow;

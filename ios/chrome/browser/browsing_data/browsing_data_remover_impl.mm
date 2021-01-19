@@ -10,7 +10,6 @@
 #include <string>
 
 #include "base/bind.h"
-#include "base/bind_helpers.h"
 #include "base/callback.h"
 #include "base/callback_helpers.h"
 #include "base/files/file_path.h"
@@ -33,7 +32,6 @@
 #include "components/open_from_clipboard/clipboard_recent_content.h"
 #include "components/password_manager/core/browser/password_store.h"
 #include "components/prefs/pref_service.h"
-#include "components/safe_browsing/core/features.h"
 #include "components/search_engines/template_url_service.h"
 #include "components/sessions/core/tab_restore_service.h"
 #include "components/signin/ios/browser/account_consistency_service.h"
@@ -280,10 +278,8 @@ void BrowsingDataRemoverImpl::RemoveImpl(base::Time delete_begin,
     if (session_service_) {
       NSString* state_path = base::SysUTF8ToNSString(
           browser_state_->GetStatePath().AsUTF8Unsafe());
-      [session_service_
-          deleteLastSessionFileInDirectory:state_path
-                                completion:
-                                    CreatePendingTaskCompletionClosure()];
+      [session_service_ deleteAllSessionFilesInBrowserStateDirectory:state_path
+          completion:CreatePendingTaskCompletionClosure()];
     }
 
     // Remove the screenshots taken by the system when backgrounding the
@@ -309,9 +305,7 @@ void BrowsingDataRemoverImpl::RemoveImpl(base::Time delete_begin,
             base::BindOnce(base::IgnoreResult(&base::TaskRunner::PostTask),
                            current_task_runner, FROM_HERE,
                            CreatePendingTaskCompletionClosure())));
-    if (base::FeatureList::IsEnabled(
-            safe_browsing::kSafeBrowsingAvailableOnIOS) &&
-        !browser_state_->IsOffTheRecord()) {
+    if (!browser_state_->IsOffTheRecord()) {
       GetApplicationContext()->GetSafeBrowsingService()->ClearCookies(
           deletion_time_range,
           base::BindOnce(base::IgnoreResult(&base::TaskRunner::PostTask),

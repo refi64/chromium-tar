@@ -31,7 +31,6 @@
 #include "components/prefs/json_pref_store.h"
 #include "components/prefs/pref_service.h"
 #include "components/rappor/rappor_service_impl.h"
-#include "components/safe_browsing/core/features.h"
 #include "components/translate/core/browser/translate_download_manager.h"
 #include "components/ukm/ios/features.h"
 #include "components/variations/field_trial_config/field_trial_util.h"
@@ -83,9 +82,12 @@ namespace {
 // Do not install allocator shim on iOS 13.4 due to high crash volume on this
 // particular version of OS. TODO(crbug.com/1108219): Remove this workaround
 // when/if the bug gets fixed.
+//
+// Do not install allocator shim for now, until it's clear why Chrome crashes
+// on iOS 14.3+ on startup.
+// TODO(crbug.com/1150599): Remove this workaround when/if the bug gets fixed.
 bool ShouldInstallAllocatorShim() {
-  return !base::ios::IsRunningOnOrLater(13, 4, 0) ||
-         base::ios::IsRunningOnOrLater(13, 5, 0);
+  return false;
 }
 #endif
 
@@ -261,20 +263,20 @@ void IOSChromeMainParts::PreMainMessageLoopRun() {
         application_context_->GetSharedURLLoaderFactory());
   }
 
-  if (base::FeatureList::IsEnabled(
-          safe_browsing::kSafeBrowsingAvailableOnIOS)) {
-    // Ensure that Safe Browsing is initialized.
-    SafeBrowsingService* safe_browsing_service =
-        application_context_->GetSafeBrowsingService();
-    base::FilePath user_data_path;
-    CHECK(base::PathService::Get(ios::DIR_USER_DATA, &user_data_path));
-    safe_browsing_service->Initialize(last_used_browser_state->GetPrefs(),
-                                      user_data_path);
-  }
+  // Ensure that Safe Browsing is initialized.
+  SafeBrowsingService* safe_browsing_service =
+      application_context_->GetSafeBrowsingService();
+  base::FilePath user_data_path;
+  CHECK(base::PathService::Get(ios::DIR_USER_DATA, &user_data_path));
+  safe_browsing_service->Initialize(last_used_browser_state->GetPrefs(),
+                                    user_data_path);
 }
 
 void IOSChromeMainParts::PostMainMessageLoopRun() {
   TranslateServiceIOS::Shutdown();
+#if BUILDFLAG(ENABLE_RLZ)
+  rlz::RLZTracker::CleanupRlz();
+#endif  // BUILDFLAG(ENABLE_RLZ)
   application_context_->StartTearDown();
 }
 

@@ -22,6 +22,7 @@
 
 import argparse
 import contextlib
+import fnmatch
 import json
 import logging
 import os
@@ -182,7 +183,7 @@ def get_skia_gold_keys(args):
         def append(self, line):
             if self.done_accepting_lines:
                 return
-            if 'android/test_runner.py' in line:
+            if 'Additional test environment' in line or 'android/test_runner.py' in line:
                 self.accepting_lines = False
                 self.is_android = True
             if ANDROID_BEGIN_SYSTEM_INFO in line:
@@ -323,8 +324,9 @@ def upload_test_result_to_skia_gold(args, gold_session_manager, gold_session, go
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--isolated-script-test-output', type=str, required=True)
+    parser.add_argument('--isolated-script-test-output', type=str)
     parser.add_argument('--isolated-script-test-perf-output', type=str)
+    parser.add_argument('--isolated-script-test-filter', type=str)
     parser.add_argument('--test-suite', help='Test suite to run.', default=DEFAULT_TEST_SUITE)
     parser.add_argument('--render-test-output-dir', help='Directory to store screenshots')
     parser.add_argument('--xvfb', help='Start xvfb.', action='store_true')
@@ -339,9 +341,7 @@ def main():
         sys.exit(1)
 
     results = {
-        'tests': {
-            'angle_restricted_trace_gold_tests': {}
-        },
+        'tests': {},
         'interrupted': False,
         'seconds_since_epoch': time.time(),
         'path_delimiter': '.',
@@ -353,7 +353,7 @@ def main():
         },
     }
 
-    result_tests = results['tests']['angle_restricted_trace_gold_tests']
+    result_tests = {}
 
     def run_tests(args, tests, extra_flags, env, screenshot_dir):
         keys = get_skia_gold_keys(args)
@@ -365,6 +365,15 @@ def main():
             gold_session = gold_session_manager.GetSkiaGoldSession(keys)
 
             for test in tests['traces']:
+
+                # Apply test filter if present.
+                if args.isolated_script_test_filter:
+                    full_name = 'angle_restricted_trace_gold_tests.%s' % test
+                    if not fnmatch.fnmatch(full_name, args.isolated_script_test_filter):
+                        logging.info('Skipping test %s because it does not match filter %s' %
+                                     (full_name, args.isolated_script_test_filter))
+                        continue
+
                 with common.temporary_file() as tempfile_path:
                     cmd = [
                         args.test_suite,
@@ -385,6 +394,8 @@ def main():
 
                     expected_result = SKIP if result == SKIP else PASS
                     result_tests[test] = {'expected': expected_result, 'actual': result}
+                    if result == FAIL:
+                        result_tests[test]['is_unexpected'] = True
                     if len(artifacts) > 0:
                         result_tests[test]['artifacts'] = artifacts
                     results['num_failures_by_type'][result] += 1
@@ -419,6 +430,9 @@ def main():
     except Exception:
         traceback.print_exc()
         rc = 1
+
+    if result_tests:
+        results['tests']['angle_restricted_trace_gold_tests'] = result_tests
 
     if args.isolated_script_test_output:
         with open(args.isolated_script_test_output, 'w') as out_file:

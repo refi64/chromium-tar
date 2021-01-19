@@ -132,6 +132,9 @@ TEST_P(OcclusionQueriesTest, ClearNotCounted)
     // http://anglebug.com/4925
     ANGLE_SKIP_TEST_IF(IsD3D11());
 
+    // http://anglebug.com/5307
+    ANGLE_SKIP_TEST_IF(IsMetal() && IsNVIDIA());
+
     glDepthMask(GL_TRUE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
@@ -236,7 +239,7 @@ TEST_P(OcclusionQueriesTest, CopyNotCounted)
     ANGLE_SKIP_TEST_IF(IsD3D());
 
     // http://anglebug.com/5100
-    ANGLE_SKIP_TEST_IF(IsMetal());
+    ANGLE_SKIP_TEST_IF(IsMetal() && IsNVIDIA());
 
     GLuint query = 0;
     glGenQueriesEXT(1, &query);
@@ -390,6 +393,10 @@ TEST_P(OcclusionQueriesTest, MultiQueries)
 
     // http://anglebug.com/4925
     ANGLE_SKIP_TEST_IF(IsMetal() && IsNVIDIA());
+
+    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsMetal());
 
     GLuint query[5] = {};
     glGenQueriesEXT(5, query);

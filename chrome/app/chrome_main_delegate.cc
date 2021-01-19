@@ -65,6 +65,7 @@
 #include "content/public/common/service_names.mojom.h"
 #include "content/public/common/url_constants.h"
 #include "extensions/common/constants.h"
+#include "net/http/http_cache.h"
 #include "net/url_request/url_request.h"
 #include "pdf/buildflags.h"
 #include "ppapi/buildflags/buildflags.h"
@@ -266,8 +267,7 @@ void AdjustLinuxOOMScore(const std::string& process_type) {
     score = content::kPluginOomScore;
   } else if (process_type == switches::kUtilityProcess ||
              process_type == switches::kGpuProcess ||
-             process_type == switches::kCloudPrintServiceProcess ||
-             process_type == switches::kPpapiBrokerProcess) {
+             process_type == switches::kCloudPrintServiceProcess) {
     score = content::kMiscOomScore;
 #if BUILDFLAG(ENABLE_NACL)
   } else if (process_type == switches::kNaClLoaderProcess ||
@@ -311,7 +311,6 @@ bool SubprocessNeedsResourceBundle(const std::string& process_type) {
       process_type == switches::kNaClLoaderProcess ||
 #endif
       process_type == switches::kPpapiPluginProcess ||
-      process_type == switches::kPpapiBrokerProcess ||
       process_type == switches::kGpuProcess ||
 #endif
       process_type == switches::kRendererProcess ||
@@ -532,9 +531,9 @@ void ChromeMainDelegate::PostEarlyInitialization(bool is_running_tests) {
   chromeos::InitializeDBus();
 #endif
 
-  DCHECK(startup_data_);
-  auto* chrome_feature_list_creator =
-      startup_data_->chrome_feature_list_creator();
+  ChromeFeatureListCreator* chrome_feature_list_creator =
+      chrome_content_browser_client_->startup_data()
+          ->chrome_feature_list_creator();
   chrome_feature_list_creator->CreateFeatureList();
   PostFieldTrialInitialization();
 
@@ -557,7 +556,7 @@ void ChromeMainDelegate::PostEarlyInitialization(bool is_running_tests) {
 #endif
 
 #if defined(OS_ANDROID)
-  startup_data_->CreateProfilePrefService();
+  chrome_content_browser_client_->startup_data()->CreateProfilePrefService();
   net::NetworkChangeNotifier::SetFactory(
       new net::NetworkChangeNotifierFactoryAndroid());
 #endif
@@ -570,7 +569,7 @@ void ChromeMainDelegate::PostEarlyInitialization(bool is_running_tests) {
         base::FeatureList::IsEnabled(chrome::android::kUmaBackgroundSessions);
 #endif
     if (record)
-      startup_data_->RecordCoreSystemProfile();
+      chrome_content_browser_client_->startup_data()->RecordCoreSystemProfile();
   }
 
 #if defined(OS_ANDROID)
@@ -588,6 +587,11 @@ void ChromeMainDelegate::PostFieldTrialInitialization() {
       base::CommandLine::ForCurrentProcess()->GetSwitchValueASCII(
           switches::kProcessType);
   bool is_browser_process = process_type.empty();
+
+  // Enable Split cache by default here and not in content/ so as to not
+  // impact non-Chrome embedders like WebView, Cronet etc. This only enables
+  // it if not already overridden by command line, field trial etc.
+  net::HttpCache::SplitCacheFeatureEnableByDefault();
 
 #if defined(OS_ANDROID)
   // For child processes, this requires allowlisting of the sched_setaffinity()
@@ -980,14 +984,12 @@ void ChromeMainDelegate::PreSandboxStartup() {
     DCHECK(command_line.HasSwitch(switches::kLang) ||
            process_type == switches::kZygoteProcess ||
            process_type == switches::kGpuProcess ||
-           process_type == switches::kPpapiBrokerProcess ||
            process_type == switches::kPpapiPluginProcess);
 #else
     DCHECK(command_line.HasSwitch(switches::kLang) ||
            process_type == switches::kZygoteProcess ||
            process_type == switches::kGpuProcess ||
            process_type == switches::kNaClLoaderProcess ||
-           process_type == switches::kPpapiBrokerProcess ||
            process_type == switches::kPpapiPluginProcess);
 #endif
 
@@ -1212,13 +1214,8 @@ content::ContentClient* ChromeMainDelegate::CreateContentClient() {
 
 content::ContentBrowserClient*
 ChromeMainDelegate::CreateContentBrowserClient() {
-  if (chrome_content_browser_client_ == nullptr) {
-    DCHECK(!startup_data_);
-    startup_data_ = std::make_unique<StartupData>();
-
-    chrome_content_browser_client_ =
-        std::make_unique<ChromeContentBrowserClient>(startup_data_.get());
-  }
+  chrome_content_browser_client_ =
+      std::make_unique<ChromeContentBrowserClient>();
   return chrome_content_browser_client_.get();
 }
 

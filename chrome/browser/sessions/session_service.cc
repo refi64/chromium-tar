@@ -12,7 +12,7 @@
 #include <vector>
 
 #include "base/bind.h"
-#include "base/bind_helpers.h"
+#include "base/callback_helpers.h"
 #include "base/command_line.h"
 #include "base/metrics/histogram_macros.h"
 #include "base/pickle.h"
@@ -775,8 +775,9 @@ void SessionService::BuildCommandsForBrowser(
                                                   browser->user_title()));
   }
 
-  sessions::CreateSetWindowWorkspaceCommand(
-      browser->session_id(), browser->window()->GetWorkspace());
+  command_storage_manager_->AppendRebuildCommand(
+      sessions::CreateSetWindowWorkspaceCommand(
+          browser->session_id(), browser->window()->GetWorkspace()));
 
   windows_to_track->insert(browser->session_id());
   TabStripModel* tab_strip = browser->tab_strip_model();

@@ -24,8 +24,8 @@ import org.chromium.base.TraceEvent;
 import org.chromium.base.UserDataHost;
 import org.chromium.base.annotations.CalledByNative;
 import org.chromium.base.annotations.NativeMethods;
+import org.chromium.base.supplier.ObservableSupplierImpl;
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.ChromeVersionInfo;
 import org.chromium.chrome.browser.WarmupManager;
 import org.chromium.chrome.browser.WebContentsFactory;
 import org.chromium.chrome.browser.app.ChromeActivity;
@@ -36,12 +36,13 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.native_page.NativePageAssassin;
 import org.chromium.chrome.browser.night_mode.NightModeUtils;
 import org.chromium.chrome.browser.offlinepages.OfflinePageUtils;
-import org.chromium.chrome.browser.paint_preview.PaintPreviewHelper;
+import org.chromium.chrome.browser.paint_preview.StartupPaintPreviewHelper;
 import org.chromium.chrome.browser.rlz.RevenueStats;
 import org.chromium.chrome.browser.tab.state.CriticalPersistedTabData;
 import org.chromium.chrome.browser.ui.TabObscuringHandler;
 import org.chromium.chrome.browser.ui.native_page.FrozenNativePage;
 import org.chromium.chrome.browser.ui.native_page.NativePage;
+import org.chromium.chrome.browser.version.ChromeVersionInfo;
 import org.chromium.chrome.browser.vr.VrModuleProvider;
 import org.chromium.components.dom_distiller.core.DomDistillerUrlUtils;
 import org.chromium.components.embedder_support.util.UrlConstants;
@@ -186,6 +187,10 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
 
     private final UserDataHost mUserDataHost = new UserDataHost();
 
+    private boolean mIsDestroyed;
+    private ObservableSupplierImpl<Boolean> mIsTabSaveEnabledSupplier =
+            new ObservableSupplierImpl<>();
+
     /**
      * Creates an instance of a {@link TabImpl}.
      *
@@ -201,6 +206,7 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
      */
     @SuppressLint("HandlerLeak")
     TabImpl(int id, Tab parent, boolean incognito, @Nullable @TabLaunchType Integer launchType) {
+        mIsTabSaveEnabledSupplier.set(false);
         mId = TabIdManager.getInstance().generateValidId(id);
         mIncognito = incognito;
         if (parent == null) {
@@ -742,6 +748,11 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
                 && TabImplJni.get().getHideFutureNavigations(mNativeTabAndroid);
     }
 
+    @Override
+    public void setIsTabSaveEnabled(boolean isTabSaveEnabled) {
+        mIsTabSaveEnabledSupplier.set(isTabSaveEnabled);
+    }
+
     // TabObscuringHandler.Observer
 
     @Override
@@ -835,6 +846,7 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
             if (CriticalPersistedTabData.from(this).getTimestampMillis() == INVALID_TIMESTAMP) {
                 CriticalPersistedTabData.from(this).setTimestampMillis(System.currentTimeMillis());
             }
+            registerTabSaving();
             String appId;
             Boolean hasThemeColor;
             int themeColor;
@@ -853,6 +865,12 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
             }
             TraceEvent.end("Tab.initialize");
         }
+    }
+
+    @VisibleForTesting(otherwise = VisibleForTesting.PRIVATE)
+    public void registerTabSaving() {
+        CriticalPersistedTabData.from(this).registerIsTabSaveEnabledSupplier(
+                mIsTabSaveEnabledSupplier);
     }
 
     private boolean useCriticalPersistedTabData() {
@@ -1141,6 +1159,19 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
         return mPendingLoadParams;
     }
 
+    @Override
+    public void setShouldBlockNewNotificationRequests(boolean value) {
+        if (mNativeTabAndroid != 0) {
+            TabImplJni.get().setShouldBlockNewNotificationRequests(mNativeTabAndroid, value);
+        }
+    }
+
+    @Override
+    public boolean getShouldBlockNewNotificationRequests() {
+        return mNativeTabAndroid != 0
+                && TabImplJni.get().getShouldBlockNewNotificationRequests(mNativeTabAndroid);
+    }
+
     /**
      * Performs any subclass-specific tasks when the Tab crashes.
      */
@@ -1387,7 +1418,7 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
     private final void restoreIfNeeded() {
         // Attempts to display the Paint Preview representation of this Tab. Please note that this
         // is behind an experimental flag (crbug.com/1008520).
-        if (isFrozen()) PaintPreviewHelper.showPaintPreviewOnRestore(this);
+        if (isFrozen()) StartupPaintPreviewHelper.showPaintPreviewOnRestore(this);
 
         try {
             TraceEvent.begin("Tab.restoreIfNeeded");
@@ -1548,5 +1579,7 @@ public class TabImpl implements Tab, TabObscuringHandler.Observer {
         boolean getAddApi2TransitionToFutureNavigations(long nativeTabAndroid);
         void setHideFutureNavigations(long nativeTabAndroid, boolean hide);
         boolean getHideFutureNavigations(long nativeTabAndroid);
+        void setShouldBlockNewNotificationRequests(long nativeTabAndroid, boolean value);
+        boolean getShouldBlockNewNotificationRequests(long nativeTabAndroid);
     }
 }

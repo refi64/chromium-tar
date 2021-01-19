@@ -301,6 +301,9 @@ TEST_P(DrawBuffersTest, BlendWithGaps)
     // Fails on Intel Ubuntu 19.04 Mesa 19.0.2 Vulkan. http://anglebug.com/3616
     ANGLE_SKIP_TEST_IF(IsLinux() && IsIntel() && IsVulkan());
 
+    // http://anglebug.com/5154
+    ANGLE_SKIP_TEST_IF(IsOSX() && IsIntel() && IsDesktopOpenGL());
+
     glBindTexture(GL_TEXTURE_2D, mTextures[0]);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, mTextures[0], 0);
 
@@ -991,6 +994,9 @@ TEST_P(ColorMaskForDrawBuffersTest, ScissoredClear)
 // Test draw buffer state change followed FBO blit
 TEST_P(ColorMaskForDrawBuffersTest, Blit)
 {
+    // http://anglebug.com/5284
+    ANGLE_SKIP_TEST_IF(IsMetal());
+
     ANGLE_SKIP_TEST_IF(!setupTest());
     setupColorMaskForDrawBuffersTest();
 

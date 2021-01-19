@@ -7,7 +7,7 @@
 #include <utility>
 
 #include "base/bind.h"
-#include "base/bind_helpers.h"
+#include "base/callback_helpers.h"
 #include "base/macros.h"
 #include "base/memory/ptr_util.h"
 #include "base/rand_util.h"
@@ -323,6 +323,7 @@ void CanvasCaptureHandler::ReadARGBPixelsAsync(
 
   IncrementOngoingAsyncPixelReadouts();
   gpu::MailboxHolder mailbox_holder = image->GetMailboxHolder();
+  DCHECK(context_provider->RasterInterface());
   context_provider->RasterInterface()->WaitSyncTokenCHROMIUM(
       mailbox_holder.sync_token.GetConstData());
   context_provider->RasterInterface()->ReadbackARGBPixelsAsync(

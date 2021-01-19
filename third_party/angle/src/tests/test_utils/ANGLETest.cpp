@@ -315,6 +315,7 @@ constexpr uint32_t kWindowReuseLimit = 50;
 constexpr char kUseConfig[]                      = "--use-config=";
 constexpr char kReuseDisplays[]                  = "--reuse-displays";
 constexpr char kEnableANGLEPerTestCaptureLabel[] = "--angle-per-test-capture-label";
+constexpr char kBatchId[]                        = "--batch-id=";
 
 void SetupEnvironmentVarsForCaptureReplay()
 {
@@ -537,9 +538,27 @@ void ANGLETestBase::ANGLETestSetUp()
     // Resize the window before creating the context so that the first make current
     // sets the viewport and scissor box to the right size.
     bool needSwap = false;
-    if (mFixture->osWindow->getWidth() != mWidth || mFixture->osWindow->getHeight() != mHeight)
+
+    int osWindowWidth  = mFixture->osWindow->getWidth();
+    int osWindowHeight = mFixture->osWindow->getHeight();
+
+    const bool isRotated = mCurrentParams->eglParameters.emulatedPrerotation == 90 ||
+                           mCurrentParams->eglParameters.emulatedPrerotation == 270;
+    if (isRotated)
     {
-        if (!mFixture->osWindow->resize(mWidth, mHeight))
+        std::swap(osWindowWidth, osWindowHeight);
+    }
+
+    if (osWindowWidth != mWidth || osWindowHeight != mHeight)
+    {
+        int newWindowWidth  = mWidth;
+        int newWindowHeight = mHeight;
+        if (isRotated)
+        {
+            std::swap(newWindowWidth, newWindowHeight);
+        }
+
+        if (!mFixture->osWindow->resize(newWindowWidth, newWindowHeight))
         {
             FAIL() << "Failed to resize ANGLE test window.";
         }
@@ -621,6 +640,11 @@ void ANGLETestBase::ANGLETestTearDown()
 
     if (mFixture->reuseCounter++ >= kWindowReuseLimit || mForceNewDisplay)
     {
+        if (!mForceNewDisplay)
+        {
+            printf("Recreating test window because of reuse limit of %d\n", kWindowReuseLimit);
+        }
+
         mFixture->reuseCounter = 0;
         getGLWindow()->destroyGL();
     }
@@ -1228,9 +1252,9 @@ int ANGLETestBase::getWindowHeight() const
     return mHeight;
 }
 
-bool ANGLETestBase::isMultisampleEnabled() const
+bool ANGLETestBase::isEmulatedPrerotation() const
 {
-    return mFixture->eglWindow->isMultisample();
+    return mCurrentParams->eglParameters.emulatedPrerotation != 0;
 }
 
 void ANGLETestBase::setWindowVisible(OSWindow *osWindow, bool isVisible)
@@ -1358,12 +1382,17 @@ void ANGLEProcessTestArgs(int *argc, char *argv[])
         {
             SetSelectedConfig(argv[argIndex] + strlen(kUseConfig));
         }
-        if (strncmp(argv[argIndex], kReuseDisplays, strlen(kReuseDisplays)) == 0)
+        else if (strncmp(argv[argIndex], kReuseDisplays, strlen(kReuseDisplays)) == 0)
         {
             gReuseDisplays = true;
         }
-        if (strncmp(argv[argIndex], kEnableANGLEPerTestCaptureLabel,
-                    strlen(kEnableANGLEPerTestCaptureLabel)) == 0)
+        else if (strncmp(argv[argIndex], kBatchId, strlen(kBatchId)) == 0)
+        {
+            // Enable display reuse when running under --bot-mode.
+            gReuseDisplays = true;
+        }
+        else if (strncmp(argv[argIndex], kEnableANGLEPerTestCaptureLabel,
+                         strlen(kEnableANGLEPerTestCaptureLabel)) == 0)
         {
             gEnableANGLEPerTestCaptureLabel = true;
         }

@@ -155,6 +155,14 @@ bool IsConfigSelected()
     return gSelectedConfig[0] != 0;
 }
 
+#if !defined(ANGLE_PLATFORM_APPLE)
+// For Apple platform, see angle_test_instantiate_apple.mm
+bool IsMetalTextureSwizzleAvailable()
+{
+    return false;
+}
+#endif
+
 SystemInfo *GetTestSystemInfo()
 {
     static SystemInfo *sSystemInfo = nullptr;
@@ -213,9 +221,19 @@ bool IsOSX()
 #endif
 }
 
+bool IsARM64()
+{
+// _M_ARM64 is Windows-specific, while __aarch64__ is for other platforms.
+#if defined(_M_ARM64) || defined(__aarch64__)
+    return true;
+#else
+    return false;
+#endif
+}
+
 bool IsOzone()
 {
-#if defined(USE_OZONE) && defined(USE_X11)
+#if defined(USE_OZONE) && (defined(USE_X11) || defined(ANGLE_USE_VULKAN_DISPLAY))
     // We do not have a proper support for Ozone/Linux yet. Still, we need to figure out how to
     // properly initialize tests and differentiate between X11 and Wayland. Probably, passing a
     // command line argument could be sufficient. At the moment, run tests only for X11 backend
@@ -305,6 +323,11 @@ bool IsIntel()
     return HasSystemVendorID(kVendorID_Intel);
 }
 
+bool IsIntelUHD630Mobile()
+{
+    return HasSystemDeviceID(kVendorID_Intel, kDeviceID_UHD630Mobile);
+}
+
 bool IsAMD()
 {
     return HasSystemVendorID(kVendorID_AMD);
@@ -332,16 +355,7 @@ bool IsNVIDIA()
     return HasSystemVendorID(kVendorID_NVIDIA);
 }
 
-bool IsARM64()
-{
-#if defined(_M_ARM64)
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool IsConfigWhitelisted(const SystemInfo &systemInfo, const PlatformParameters &param)
+bool IsConfigAllowlisted(const SystemInfo &systemInfo, const PlatformParameters &param)
 {
     VendorID vendorID =
         systemInfo.gpus.empty() ? 0 : systemInfo.gpus[systemInfo.activeGPUIndex].vendorId;
@@ -377,8 +391,11 @@ bool IsConfigWhitelisted(const SystemInfo &systemInfo, const PlatformParameters 
                 {
                     case EGL_PLATFORM_ANGLE_TYPE_D3D9_ANGLE:
                     case EGL_PLATFORM_ANGLE_TYPE_D3D11_ANGLE:
-                    case EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE:
                         return true;
+                    case EGL_PLATFORM_ANGLE_TYPE_OPENGL_ANGLE:
+                        // Note we disable AMD OpenGL testing on Windows due to using a very old and
+                        // outdated card with many driver bugs. See http://anglebug.com/5123
+                        return !IsAMD();
                     case EGL_PLATFORM_ANGLE_TYPE_VULKAN_ANGLE:
                         if (IsARM64())
                         {
@@ -652,7 +669,7 @@ bool IsPlatformAvailable(const PlatformParameters &param)
 
             if (systemInfo)
             {
-                result = IsConfigWhitelisted(*systemInfo, param);
+                result = IsConfigAllowlisted(*systemInfo, param);
             }
             else
             {

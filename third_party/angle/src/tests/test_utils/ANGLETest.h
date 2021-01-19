@@ -462,7 +462,7 @@ class ANGLETestBase
     EGLWindow *getEGLWindow() const;
     int getWindowWidth() const;
     int getWindowHeight() const;
-    bool isMultisampleEnabled() const;
+    bool isEmulatedPrerotation() const;
 
     EGLint getPlatformRenderer() const;
 
@@ -510,6 +510,11 @@ class ANGLETestBase
     {
         return mCurrentParams->getRenderer() == EGL_PLATFORM_ANGLE_TYPE_VULKAN_ANGLE &&
                mCurrentParams->isSwiftshader();
+    }
+
+    bool isAsyncCommandQueueFeatureEnabled() const
+    {
+        return mCurrentParams->eglParameters.asyncCommandQueueFeatureVulkan == EGL_TRUE;
     }
 
     bool platformSupportsMultithreading() const;

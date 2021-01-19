@@ -7,7 +7,7 @@
 #import <UIKit/UIKit.h>
 
 #include "base/bind.h"
-#include "base/bind_helpers.h"
+#include "base/callback_helpers.h"
 #include "base/files/file_path.h"
 #include "base/format_macros.h"
 #include "base/location.h"
@@ -171,11 +171,29 @@ NSString* const kSessionFileName =
   return base::mac::ObjCCastStrict<SessionIOS>(rootObject);
 }
 
-- (void)deleteLastSessionFileInDirectory:(NSString*)directory
-                              completion:(base::OnceClosure)callback {
-  NSString* sessionPath = [[self class] sessionPathForDirectory:directory];
-  [self deletePaths:[NSArray arrayWithObject:sessionPath]
-         completion:std::move(callback)];
+- (void)deleteAllSessionFilesInBrowserStateDirectory:(NSString*)directory
+                                          completion:
+                                              (base::OnceClosure)callback {
+  NSMutableArray<NSString*>* sessionFilesPaths = [[NSMutableArray alloc] init];
+  NSString* sessionsDirectoryPath =
+      [directory stringByAppendingPathComponent:kSessionDirectory];
+  NSArray<NSString*>* allSessionIDs = [[NSFileManager defaultManager]
+      contentsOfDirectoryAtPath:sessionsDirectoryPath
+                          error:nil];
+  for (NSString* sessionID in allSessionIDs) {
+    NSString* sessionPath =
+        [SessionServiceIOS sessionPathForSessionID:sessionID
+                                         directory:directory];
+    [sessionFilesPaths addObject:sessionPath];
+  }
+
+  // If there were no session ids, then scenes are not supported fall back to
+  // the original location
+  if (sessionFilesPaths.count == 0)
+    [sessionFilesPaths
+        addObject:[[self class] sessionPathForDirectory:directory]];
+
+  [self deletePaths:sessionFilesPaths completion:std::move(callback)];
 }
 
 - (void)deleteSessions:(NSArray<NSString*>*)sessionIDs
@@ -245,6 +263,7 @@ NSString* const kSessionFileName =
 
   @try {
     NSError* error = nil;
+    size_t previous_cert_policy_bytes = web::GetCertPolicyBytesEncoded();
     NSData* sessionData = [NSKeyedArchiver archivedDataWithRootObject:session
                                                 requiringSecureCoding:NO
                                                                 error:&error];
@@ -255,8 +274,12 @@ NSString* const kSessionFileName =
       return;
     }
 
-    UMA_HISTOGRAM_COUNTS_100000("Session.WebStates.SerializedSize",
-                                sessionData.length / 1024);
+    base::UmaHistogramCounts100000(
+        "Session.WebStates.AllSerializedCertPolicyCachesSize",
+        web::GetCertPolicyBytesEncoded() - previous_cert_policy_bytes / 1024);
+
+    base::UmaHistogramCounts100000("Session.WebStates.SerializedSize",
+                                   sessionData.length / 1024);
 
     _taskRunner->PostTask(FROM_HERE, base::BindOnce(^{
                             [self performSaveSessionData:sessionData
