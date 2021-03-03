@@ -53,7 +53,8 @@ void ProgramPipelineVk::fillProgramStateMap(
 }
 
 angle::Result ProgramPipelineVk::link(const gl::Context *glContext,
-                                      const gl::ProgramMergedVaryings &mergedVaryings)
+                                      const gl::ProgramMergedVaryings &mergedVaryings,
+                                      const gl::ProgramVaryingPacking &varyingPacking)
 {
     ContextVk *contextVk                  = vk::GetImpl(glContext);
     const gl::State &glState              = glContext->getState();
@@ -67,6 +68,7 @@ angle::Result ProgramPipelineVk::link(const gl::Context *glContext,
 
     // Now that the program pipeline has all of the programs attached, the various descriptor
     // set/binding locations need to be re-assigned to their correct values.
+    gl::ShaderType frontShaderType = gl::ShaderType::InvalidEnum;
     for (const gl::ShaderType shaderType : glPipeline->getExecutable().getLinkedShaderStages())
     {
         gl::Program *glProgram =
@@ -76,14 +78,15 @@ angle::Result ProgramPipelineVk::link(const gl::Context *glContext,
             // The program interface info must survive across shaders, except
             // for some program-specific values.
             ProgramVk *programVk = vk::GetImpl(glProgram);
-            GlslangProgramInterfaceInfo &programProgramInterfaceInfo =
+            const GlslangProgramInterfaceInfo &programProgramInterfaceInfo =
                 programVk->getGlslangProgramInterfaceInfo();
             glslangProgramInterfaceInfo.locationsUsedForXfbExtension =
                 programProgramInterfaceInfo.locationsUsedForXfbExtension;
 
-            GlslangAssignLocations(options, glProgram->getState().getExecutable(), shaderType,
-                                   &glslangProgramInterfaceInfo,
-                                   &mExecutable.getShaderInterfaceVariableInfoMap());
+            GlslangAssignLocations(options, glProgram->getState().getExecutable(), varyingPacking,
+                                   shaderType, frontShaderType, &glslangProgramInterfaceInfo,
+                                   &mExecutable.mVariableInfoMap);
+            frontShaderType = shaderType;
         }
     }
 

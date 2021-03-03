@@ -96,8 +96,8 @@ class TOutputGLSLBase : public TIntermTraverser
     sh::GLenum getShaderType() { return mShaderType; }
 
   private:
-    void declareInterfaceBlockLayout(const TInterfaceBlock *interfaceBlock);
-    void declareInterfaceBlock(const TInterfaceBlock *interfaceBlock);
+    void declareInterfaceBlockLayout(const TType &type);
+    void declareInterfaceBlock(const TType &type);
 
     void writeBuiltInFunctionTriplet(Visit visit, TOperator op, bool useEmulatedFunction);
 

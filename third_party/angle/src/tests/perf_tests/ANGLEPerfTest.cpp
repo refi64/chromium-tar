@@ -11,6 +11,7 @@
 
 #include "ANGLEPerfTestArgs.h"
 #include "common/debug.h"
+#include "common/mathutil.h"
 #include "common/platform.h"
 #include "common/system_utils.h"
 #include "common/utilities.h"
@@ -92,6 +93,8 @@ angle::TraceEventHandle AddPerfTraceEvent(angle::PlatformMethods *platform,
     const TraceCategory *category = reinterpret_cast<const TraceCategory *>(categoryEnabledFlag);
 
     ANGLERenderTest *renderTest = static_cast<ANGLERenderTest *>(platform->context);
+
+    std::lock_guard<std::mutex> lock(renderTest->getTraceEventMutex());
 
     uint32_t tid = renderTest->getCurrentThreadSerial();
 
@@ -218,7 +221,6 @@ ANGLEPerfTest::ANGLEPerfTest(const std::string &name,
       mStepsToRun(std::max(gStepsPerTrial, gMaxStepsPerformed)),
       mTrialNumStepsPerformed(0),
       mTotalNumStepsPerformed(0),
-      mStepsPerRunLoopStep(1),
       mIterationsPerStep(iterationsPerStep),
       mRunning(true)
 {
@@ -293,12 +295,6 @@ void ANGLEPerfTest::run()
     }
 }
 
-void ANGLEPerfTest::setStepsPerRunLoopStep(int stepsPerRunLoop)
-{
-    ASSERT(stepsPerRunLoop >= 1);
-    mStepsPerRunLoopStep = stepsPerRunLoop;
-}
-
 void ANGLEPerfTest::doRunLoop(double maxRunTime, int maxStepsToRun, RunLoopPolicy runPolicy)
 {
     mTrialNumStepsPerformed = 0;
@@ -318,9 +314,13 @@ void ANGLEPerfTest::doRunLoop(double maxRunTime, int maxStepsToRun, RunLoopPolic
 
         if (mRunning)
         {
-            mTrialNumStepsPerformed += mStepsPerRunLoopStep;
-            mTotalNumStepsPerformed += mStepsPerRunLoopStep;
-            if (mTimer.getElapsedTime() > maxRunTime)
+            mTrialNumStepsPerformed++;
+            mTotalNumStepsPerformed++;
+            if (gMaxStepsPerformed > 0 && mTotalNumStepsPerformed >= gMaxStepsPerformed)
+            {
+                mRunning = false;
+            }
+            else if (mTimer.getElapsedTime() > maxRunTime)
             {
                 mRunning = false;
             }
@@ -430,6 +430,11 @@ void ANGLEPerfTest::calibrateStepsToRun()
     mStepsToRun  = static_cast<unsigned int>(static_cast<double>(mTrialNumStepsPerformed) * scale);
     mStepsToRun  = std::max(1, mStepsToRun);
 
+    if (getStepAlignment() != 1)
+    {
+        mStepsToRun = rx::roundUp(mStepsToRun, getStepAlignment());
+    }
+
     if (gVerboseLogging)
     {
         printf(
@@ -445,6 +450,12 @@ void ANGLEPerfTest::calibrateStepsToRun()
         mReporter->AddResult(".steps", static_cast<size_t>(mStepsToRun));
         return;
     }
+}
+
+int ANGLEPerfTest::getStepAlignment() const
+{
+    // Default: No special alignment rules.
+    return 1;
 }
 
 std::string RenderTestParams::backend() const
@@ -688,17 +699,13 @@ void ANGLERenderTest::SetUp()
         // FAIL returns.
     }
 
-    mTestTrialResults.reserve(gTestTrials);
-
-    // Capture a screenshot if enabled.
-    if (gScreenShotDir != nullptr)
+    if (gVerboseLogging)
     {
-        std::stringstream screenshotNameStr;
-        screenshotNameStr << gScreenShotDir << GetPathSeparator() << "angle" << mBackend << "_"
-                          << mStory << ".png";
-        std::string screenshotName = screenshotNameStr.str();
-        saveScreenshot(screenshotName);
+        printf("GL_RENDERER: %s\n", glGetString(GL_RENDERER));
+        printf("GL_VERSION: %s\n", glGetString(GL_VERSION));
     }
+
+    mTestTrialResults.reserve(gTestTrials);
 
     for (int loopIndex = 0; loopIndex < gWarmupLoops; ++loopIndex)
     {

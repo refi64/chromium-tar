@@ -156,10 +156,10 @@ void AddToPNextChain(VulkanStruct1 *chainStart, VulkanStruct2 *ptr)
 
 struct Error
 {
-    VkResult mErrorCode;
-    const char *mFile;
-    const char *mFunction;
-    unsigned int mLine;
+    VkResult errorCode;
+    const char *file;
+    const char *function;
+    uint32_t line;
 };
 
 // Abstracts error handling. Implemented by both ContextVk for GL and DisplayVk for EGL errors.
@@ -372,14 +372,14 @@ class StagingBuffer final : angle::NonCopyable
 };
 
 angle::Result InitMappableAllocation(Context *context,
-                                     const vk::Allocator &allocator,
+                                     const Allocator &allocator,
                                      Allocation *allocation,
                                      VkDeviceSize size,
                                      int value,
                                      VkMemoryPropertyFlags memoryPropertyFlags);
 
 angle::Result InitMappableDeviceMemory(Context *context,
-                                       vk::DeviceMemory *deviceMemory,
+                                       DeviceMemory *deviceMemory,
                                        VkDeviceSize size,
                                        int value,
                                        VkMemoryPropertyFlags memoryPropertyFlags);
@@ -406,6 +406,14 @@ angle::Result AllocateImageMemoryWithRequirements(Context *context,
                                                   const void *extraAllocationInfo,
                                                   Image *image,
                                                   DeviceMemory *deviceMemoryOut);
+
+angle::Result AllocateBufferMemoryWithRequirements(Context *context,
+                                                   VkMemoryPropertyFlags memoryPropertyFlags,
+                                                   const VkMemoryRequirements &memoryRequirements,
+                                                   const void *extraAllocationInfo,
+                                                   Buffer *buffer,
+                                                   VkMemoryPropertyFlags *memoryPropertyFlagsOut,
+                                                   DeviceMemory *deviceMemoryOut);
 
 using ShaderAndSerial = ObjectAndSerial<ShaderModule>;
 
@@ -599,12 +607,23 @@ class Shared final : angle::NonCopyable
         }
     }
 
+    void setUnreferenced(RefCounted<T> *refCounted)
+    {
+        ASSERT(!mRefCounted);
+        ASSERT(refCounted);
+
+        mRefCounted = refCounted;
+        mRefCounted->addRef();
+    }
+
     void assign(VkDevice device, T &&newObject)
     {
         set(device, new RefCounted<T>(std::move(newObject)));
     }
 
     void copy(VkDevice device, const Shared<T> &other) { set(device, other.mRefCounted); }
+
+    void copyUnreferenced(const Shared<T> &other) { setUnreferenced(other.mRefCounted); }
 
     void reset(VkDevice device) { set(device, nullptr); }
 
@@ -618,6 +637,23 @@ class Shared final : angle::NonCopyable
             {
                 ASSERT(mRefCounted->get().valid());
                 recycler->recycle(std::move(mRefCounted->get()));
+                SafeDelete(mRefCounted);
+            }
+
+            mRefCounted = nullptr;
+        }
+    }
+
+    template <typename OnRelease>
+    void resetAndRelease(OnRelease *onRelease)
+    {
+        if (mRefCounted)
+        {
+            mRefCounted->releaseRef();
+            if (!mRefCounted->isReferenced())
+            {
+                ASSERT(mRefCounted->get().valid());
+                (*onRelease)(std::move(mRefCounted->get()));
                 SafeDelete(mRefCounted);
             }
 
@@ -682,6 +718,8 @@ struct SpecializationConstants final
 {
     VkBool32 lineRasterEmulation;
     uint32_t surfaceRotation;
+    uint32_t drawableWidth;
+    uint32_t drawableHeight;
 };
 ANGLE_DISABLE_STRUCT_PADDING_WARNINGS
 
@@ -734,7 +772,7 @@ class ClearValuesArray final
 #define ANGLE_VK_SERIAL_OP(X) \
     X(Buffer)                 \
     X(Image)                  \
-    X(ImageView)              \
+    X(ImageOrBufferView)      \
     X(Sampler)
 
 #define ANGLE_DEFINE_VK_SERIAL_TYPE(Type)                                     \

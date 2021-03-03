@@ -29,6 +29,7 @@
 #include "base/task/cancelable_task_tracker.h"
 #include "base/threading/thread_task_runner_handle.h"
 #include "build/build_config.h"
+#include "build/chromeos_buildflags.h"
 #include "chrome/browser/browser_process.h"
 #include "chrome/browser/prefs/session_startup_pref.h"
 #include "chrome/browser/profiles/profile.h"
@@ -70,7 +71,8 @@
 #include "extensions/browser/extension_registry.h"
 #include "extensions/common/extension_set.h"
 
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+#include "ash/public/cpp/ash_features.h"
 #include "chrome/browser/chromeos/boot_times_recorder.h"
 #endif
 
@@ -175,7 +177,8 @@ class SessionRestoreImpl : public BrowserListObserver {
     for (auto i = begin; i != end; ++i) {
       Browser* browser = CreateRestoredBrowser(
           BrowserTypeForWindowType((*i)->type), (*i)->bounds, (*i)->workspace,
-          (*i)->show_state, (*i)->app_name, (*i)->user_title);
+          (*i)->visible_on_all_workspaces, (*i)->show_state, (*i)->app_name,
+          (*i)->user_title);
       browsers.push_back(browser);
 
       // Restore and show the browser.
@@ -218,7 +221,7 @@ class SessionRestoreImpl : public BrowserListObserver {
     if (disposition == WindowOpenDisposition::CURRENT_TAB) {
       DCHECK(!use_new_window);
       web_contents = chrome::ReplaceRestoredTab(
-          browser, tab.navigations, selected_index, true, tab.extension_app_id,
+          browser, tab.navigations, selected_index, tab.extension_app_id,
           nullptr, tab.user_agent_override, true /* from_session_restore */);
     } else {
       int tab_index =
@@ -227,7 +230,7 @@ class SessionRestoreImpl : public BrowserListObserver {
           browser, tab.navigations, tab_index, selected_index,
           tab.extension_app_id, base::nullopt,
           disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB,  // selected
-          tab.pinned, true, base::TimeTicks(), nullptr, tab.user_agent_override,
+          tab.pinned, base::TimeTicks(), nullptr, tab.user_agent_override,
           true /* from_session_restore */);
       // Start loading the tab immediately.
       web_contents->GetController().LoadIfNecessary();
@@ -313,7 +316,7 @@ class SessionRestoreImpl : public BrowserListObserver {
       BrowserList::RemoveObserver(this);
     }
 
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     chromeos::BootTimesRecorder::Get()->AddLoginTimeMarker("SessionRestore-End",
                                                            false);
 #endif
@@ -323,7 +326,7 @@ class SessionRestoreImpl : public BrowserListObserver {
   void OnGotSession(
       std::vector<std::unique_ptr<sessions::SessionWindow>> windows,
       SessionID active_window_id) {
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     chromeos::BootTimesRecorder::Get()->AddLoginTimeMarker(
         "SessionRestore-GotSession", false);
 #endif
@@ -364,7 +367,7 @@ class SessionRestoreImpl : public BrowserListObserver {
       return FinishedTabCreation(false, false, created_contents);
     }
 
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     chromeos::BootTimesRecorder::Get()->AddLoginTimeMarker(
         "SessionRestore-CreatingTabs-Start", false);
 #endif
@@ -400,7 +403,7 @@ class SessionRestoreImpl : public BrowserListObserver {
         // The first set of tabs is added to the existing browser.
         browser = browser_;
       } else {
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
         chromeos::BootTimesRecorder::Get()->AddLoginTimeMarker(
             "SessionRestore-CreateRestoredBrowser-Start", false);
 #endif
@@ -413,8 +416,9 @@ class SessionRestoreImpl : public BrowserListObserver {
         }
         browser = CreateRestoredBrowser(
             BrowserTypeForWindowType((*i)->type), (*i)->bounds, (*i)->workspace,
-            show_state, (*i)->app_name, (*i)->user_title);
-#if defined(OS_CHROMEOS)
+            (*i)->visible_on_all_workspaces, show_state, (*i)->app_name,
+            (*i)->user_title);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
         chromeos::BootTimesRecorder::Get()->AddLoginTimeMarker(
             "SessionRestore-CreateRestoredBrowser-End", false);
 #endif
@@ -441,9 +445,17 @@ class SessionRestoreImpl : public BrowserListObserver {
 
       // 5. Restore tabs in |browser|. This will also call Show() on |browser|
       //    if its initial show state is not mimimized.
+      // However, with desks restore enabled, a window is restored to its parent
+      // desk, which can be non-active desk, and left invisible but unminimized.
       RestoreTabsToBrowser(*(*i), browser, initial_tab_count, created_contents);
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+      DCHECK(browser->window()->IsVisible() ||
+             browser->window()->IsMinimized() ||
+             ash::features::IsBentoEnabled());
+#else
       DCHECK(browser->window()->IsVisible() ||
              browser->window()->IsMinimized());
+#endif
 
       // 6. Tabs will be grouped appropriately in RestoreTabsToBrowser. Now
       //    restore the groups' visual data.
@@ -478,7 +490,7 @@ class SessionRestoreImpl : public BrowserListObserver {
 
     if (last_normal_browser && !urls_to_open_.empty())
       AppendURLsToBrowser(last_normal_browser, urls_to_open_);
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     chromeos::BootTimesRecorder::Get()->AddLoginTimeMarker(
         "SessionRestore-CreatingTabs-End", false);
 #endif
@@ -613,7 +625,7 @@ class SessionRestoreImpl : public BrowserListObserver {
     // Apply the stored group.
     WebContents* web_contents = chrome::AddRestoredTab(
         browser, tab.navigations, tab_index, selected_index,
-        tab.extension_app_id, tab.group, is_selected_tab, tab.pinned, true,
+        tab.extension_app_id, tab.group, is_selected_tab, tab.pinned,
         last_active_time, session_storage_namespace.get(),
         tab.user_agent_override, true /* from_session_restore */);
     DCHECK(web_contents);
@@ -634,6 +646,7 @@ class SessionRestoreImpl : public BrowserListObserver {
   Browser* CreateRestoredBrowser(Browser::Type type,
                                  gfx::Rect bounds,
                                  const std::string& workspace,
+                                 bool visible_on_all_workspaces,
                                  ui::WindowShowState show_state,
                                  const std::string& app_name,
                                  const std::string& user_title) {
@@ -641,7 +654,7 @@ class SessionRestoreImpl : public BrowserListObserver {
     params.initial_bounds = bounds;
     params.user_title = user_title;
 
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
     // We only store trusted app windows, so we also create them as trusted.
     if (type == Browser::Type::TYPE_APP) {
       params = Browser::CreateParams::CreateForApp(
@@ -656,6 +669,7 @@ class SessionRestoreImpl : public BrowserListObserver {
 
     params.initial_show_state = show_state;
     params.initial_workspace = workspace;
+    params.initial_visible_on_all_workspaces_state = visible_on_all_workspaces;
     params.is_session_restore = true;
     return Browser::Create(params);
   }
@@ -759,7 +773,7 @@ Browser* SessionRestore::RestoreSession(
     Profile* profile, Browser* browser,
     SessionRestore::BehaviorBitmask behavior,
     const std::vector<GURL>& urls_to_open) {
-#if defined(OS_CHROMEOS)
+#if BUILDFLAG(IS_CHROMEOS_ASH)
   chromeos::BootTimesRecorder::Get()->AddLoginTimeMarker(
       "SessionRestore-Start", false);
 #endif
@@ -783,9 +797,26 @@ Browser* SessionRestore::RestoreSession(
 
 // static
 void SessionRestore::RestoreSessionAfterCrash(Browser* browser) {
+  auto* profile = browser->profile();
+
+#if BUILDFLAG(IS_CHROMEOS_ASH)
+  // Bento restores a window to the right desk, so we should not
+  // reuse any browser window. Otherwise, the conflict of the parent desk
+  // arises because tabs created in this |browser| should remain in the
+  // current active desk, but the first restored window should be restored
+  // to its saved parent desk before a crash. This also avoids users'
+  // confusion of the current window disappearing from the current desk
+  // after pressing a restore button.
+  if (ash::features::IsBentoEnabled())
+    browser = nullptr;
+#endif
+
   SessionRestore::BehaviorBitmask behavior =
-      HasSingleNewTabPage(browser) ? SessionRestore::CLOBBER_CURRENT_TAB : 0;
-  SessionRestore::RestoreSession(browser->profile(), browser, behavior,
+      browser && HasSingleNewTabPage(browser)
+          ? SessionRestore::CLOBBER_CURRENT_TAB
+          : 0;
+
+  SessionRestore::RestoreSession(profile, browser, behavior,
                                  std::vector<GURL>());
 }
 
@@ -850,7 +881,7 @@ bool SessionRestore::IsRestoringSynchronously() {
 }
 
 // static
-SessionRestore::CallbackSubscription
+base::CallbackListSubscription
 SessionRestore::RegisterOnSessionRestoredCallback(
     const base::RepeatingCallback<void(int)>& callback) {
   return on_session_restored_callbacks()->Add(callback);

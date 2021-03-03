@@ -113,6 +113,7 @@ DisplayEGL::DisplayEGL(const egl::DisplayState &state)
       mRenderer(nullptr),
       mEGL(nullptr),
       mConfig(EGL_NO_CONFIG_KHR),
+      mCurrentNativeContexts(),
       mHasEXTCreateContextRobustness(false),
       mHasNVRobustnessVideoMemoryPurge(false)
 {}
@@ -564,12 +565,6 @@ egl::Error DisplayEGL::restoreLostDevice(const egl::Display *display)
 bool DisplayEGL::isValidNativeWindow(EGLNativeWindowType window) const
 {
     return true;
-}
-
-DeviceImpl *DisplayEGL::createDevice()
-{
-    UNIMPLEMENTED();
-    return nullptr;
 }
 
 egl::Error DisplayEGL::waitClient(const gl::Context *context)

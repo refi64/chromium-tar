@@ -47,8 +47,8 @@ const size_t g_numProcs = {num_procs};
 
 includes_gles = """#include "libGLESv2/proc_table_egl.h"
 
-#include "libGLESv2/entry_points_egl.h"
-#include "libGLESv2/entry_points_egl_ext.h"
+#include "libGLESv2/entry_points_egl_autogen.h"
+#include "libGLESv2/entry_points_egl_ext_autogen.h"
 #include "libGLESv2/entry_points_gles_1_0_autogen.h"
 #include "libGLESv2/entry_points_gles_2_0_autogen.h"
 #include "libGLESv2/entry_points_gles_3_0_autogen.h"
@@ -61,30 +61,19 @@ includes_gles = """#include "libGLESv2/proc_table_egl.h"
 includes_gl = """#include "libGL/proc_table_wgl.h"
 
 #include "libGL/entry_points_wgl.h"
-#include "libGL/entry_points_gl_1_0_autogen.h"
-#include "libGL/entry_points_gl_1_1_autogen.h"
-#include "libGL/entry_points_gl_1_2_autogen.h"
-#include "libGL/entry_points_gl_1_3_autogen.h"
-#include "libGL/entry_points_gl_1_4_autogen.h"
-#include "libGL/entry_points_gl_1_5_autogen.h"
-#include "libGL/entry_points_gl_2_0_autogen.h"
-#include "libGL/entry_points_gl_2_1_autogen.h"
-#include "libGL/entry_points_gl_3_0_autogen.h"
-#include "libGL/entry_points_gl_3_1_autogen.h"
-#include "libGL/entry_points_gl_3_2_autogen.h"
-#include "libGL/entry_points_gl_3_3_autogen.h"
-#include "libGL/entry_points_gl_4_0_autogen.h"
-#include "libGL/entry_points_gl_4_1_autogen.h"
-#include "libGL/entry_points_gl_4_2_autogen.h"
-#include "libGL/entry_points_gl_4_3_autogen.h"
-#include "libGL/entry_points_gl_4_4_autogen.h"
-#include "libGL/entry_points_gl_4_5_autogen.h"
-#include "libGL/entry_points_gl_4_6_autogen.h"
+#include "libGL/entry_points_gl_1_autogen.h"
+#include "libGL/entry_points_gl_2_autogen.h"
+#include "libGL/entry_points_gl_3_autogen.h"
+#include "libGL/entry_points_gl_4_autogen.h"
 #include "platform/PlatformMethods.h"
 """
 
 sys.path.append('../src/libANGLE/renderer')
 import angle_format
+
+
+def _get_annotations(versions):
+    return ["%d_%d" % version for version in versions]
 
 
 def main():
@@ -104,8 +93,7 @@ def main():
 
     glesxml = registry_xml.RegistryXML('gl.xml', 'gl_angle_ext.xml')
 
-    for annotation in ["2_0", "3_0", "3_1", "3_2", "1_0"]:
-
+    for annotation in _get_annotations(registry_xml.GLES_VERSIONS):
         name_prefix = "GL_ES_VERSION_"
         if annotation[0] == '1':
             name_prefix = "GL_VERSION_ES_CM_"
@@ -128,8 +116,7 @@ def main():
 
     eglxml = registry_xml.RegistryXML('egl.xml', 'egl_angle_ext.xml')
 
-    for annotation in ["1_0", "1_1", "1_2", "1_3", "1_4", "1_5"]:
-
+    for annotation in _get_annotations(registry_xml.EGL_VERSIONS):
         name_prefix = "EGL_VERSION_"
         feature_name = "{}{}".format(name_prefix, annotation)
         eglxml.AddCommands(feature_name, annotation)
@@ -173,11 +160,7 @@ def main():
     # libGL proc table
     glxml = registry_xml.RegistryXML('gl.xml')
 
-    for annotation in [
-            "1_0", "1_1", "1_2", "1_3", "1_4", "1_5", "2_0", "2_1", "3_0", "3_1", "3_2", "3_3",
-            "4_0", "4_1", "4_2", "4_3", "4_4", "4_5", "4_6"
-    ]:
-
+    for annotation in _get_annotations(registry_xml.DESKTOP_GL_VERSIONS):
         name_prefix = "GL_VERSION_"
         feature_name = "{}{}".format(name_prefix, annotation)
         glxml.AddCommands(feature_name, annotation)
@@ -186,8 +169,7 @@ def main():
 
     wglxml = registry_xml.RegistryXML('wgl.xml')
 
-    for annotation in ["1_0"]:
-
+    for annotation in _get_annotations(registry_xml.WGL_VERSIONS):
         name_prefix = "WGL_VERSION_"
         feature_name = "{}{}".format(name_prefix, annotation)
         wglxml.AddCommands(feature_name, annotation)

@@ -81,7 +81,7 @@ class BlitFramebufferANGLETest : public ANGLETest
             mOriginalFBO = (GLuint)originalFBO;
         }
 
-        GLenum format = GL_BGRA_EXT;
+        GLenum format = GL_RGBA;
 
         glGenFramebuffers(1, &mUserFBO);
         glBindFramebuffer(GL_FRAMEBUFFER, mUserFBO);
@@ -408,6 +408,90 @@ TEST_P(BlitFramebufferANGLETest, BlitColorToDefault)
     EXPECT_GL_NO_ERROR();
 
     glBindFramebuffer(GL_FRAMEBUFFER, mOriginalFBO);
+
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, getWindowHeight() / 4, GLColor::red);
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::green);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, getWindowHeight() / 4, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::yellow);
+}
+
+// Blit color to/from default framebuffer with Flip-X/Flip-Y.
+TEST_P(BlitFramebufferANGLETest, BlitColorWithFlip)
+{
+    // OpenGL ES 3.0 / GL_NV_framebuffer_blit required for flip.
+    ANGLE_SKIP_TEST_IF(getClientMajorVersion() < 3 &&
+                       !IsGLExtensionEnabled("GL_NV_framebuffer_blit"));
+
+    glBindFramebuffer(GL_FRAMEBUFFER, mUserFBO);
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+
+    drawQuad(mCheckerProgram, essl1_shaders::PositionAttrib(), 0.8f);
+
+    EXPECT_GL_NO_ERROR();
+
+    // Blit to default with x-flip.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER_ANGLE, mUserFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER_ANGLE, mOriginalFBO);
+
+    glBlitFramebuffer(0, 0, getWindowWidth(), getWindowHeight(), getWindowWidth(), 0, 0,
+                      getWindowHeight(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    EXPECT_GL_NO_ERROR();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, mOriginalFBO);
+
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, getWindowHeight() / 4, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::yellow);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, getWindowHeight() / 4, GLColor::red);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::green);
+
+    // Blit to default with y-flip.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER_ANGLE, mUserFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER_ANGLE, mOriginalFBO);
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glBlitFramebuffer(0, 0, getWindowWidth(), getWindowHeight(), 0, getWindowHeight(),
+                      getWindowWidth(), 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    EXPECT_GL_NO_ERROR();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, mOriginalFBO);
+
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, getWindowHeight() / 4, GLColor::green);
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::red);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, getWindowHeight() / 4, GLColor::yellow);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::blue);
+
+    // Blit from default with x-flip.
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER_ANGLE, mOriginalFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER_ANGLE, mUserFBO);
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glBlitFramebuffer(0, 0, getWindowWidth(), getWindowHeight(), getWindowWidth(), 0, 0,
+                      getWindowHeight(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    EXPECT_GL_NO_ERROR();
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER_ANGLE, mUserFBO);
+
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, getWindowHeight() / 4, GLColor::yellow);
+    EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, getWindowHeight() / 4, GLColor::green);
+    EXPECT_PIXEL_COLOR_EQ(3 * getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::red);
+
+    // Blit from default with y-flip.
+    glBindFramebuffer(GL_READ_FRAMEBUFFER_ANGLE, mOriginalFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER_ANGLE, mUserFBO);
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+    glBlitFramebuffer(0, 0, getWindowWidth(), getWindowHeight(), 0, getWindowHeight(),
+                      getWindowWidth(), 0, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    EXPECT_GL_NO_ERROR();
+
+    glBindFramebuffer(GL_FRAMEBUFFER, mUserFBO);
 
     EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, getWindowHeight() / 4, GLColor::red);
     EXPECT_PIXEL_COLOR_EQ(getWindowWidth() / 4, 3 * getWindowHeight() / 4, GLColor::green);
@@ -836,6 +920,9 @@ TEST_P(BlitFramebufferANGLETest, BlitStencil)
 
     // http://anglebug.com/4919
     ANGLE_SKIP_TEST_IF(IsIntel() && IsMetal());
+
+    // http://anglebug.com/5396
+    ANGLE_SKIP_TEST_IF(IsAMD() && IsD3D9());
 
     glBindFramebuffer(GL_FRAMEBUFFER, mUserFBO);
 

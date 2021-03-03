@@ -921,6 +921,7 @@ enum TQualifier
     EvqVaryingOut,  // vertex shaders only  read/write
     EvqUniform,     // Readonly, vertex and fragment
     EvqBuffer,      // read/write, vertex, fragment and compute shader
+    EvqPatch,       // EXT_tessellation_shader storage qualifier
 
     EvqVertexIn,     // Vertex shader input
     EvqFragmentOut,  // Fragment shader output
@@ -966,6 +967,7 @@ enum TQualifier
     EvqViewportIndex,  // gl_ViewportIndex
 
     EvqClipDistance,  // APPLE_clip_distance/EXT_clip_cull_distance
+    EvqCullDistance,  // EXT_clip_cull_distance
 
     // built-ins written by the shader_framebuffer_fetch extension(s)
     EvqLastFragColor,
@@ -987,6 +989,13 @@ enum TQualifier
     EvqNoPerspectiveIn,
     EvqCentroidIn,  // Implies smooth
     EvqSampleIn,
+
+    // GLSL ES 3.0 extension OES_sample_variables
+    EvqSampleID,
+    EvqSamplePosition,
+    EvqSampleMaskIn,
+    EvqSampleMask,
+    EvqNumSamples,
 
     // GLSL ES 3.1 compute shader special variables
     EvqShared,
@@ -1016,6 +1025,21 @@ enum TQualifier
 
     // GLSL ES 3.1 extension EXT_gpu_shader5 qualifiers
     EvqPrecise,
+
+    // GLES ES 3.1 extension EXT_tessellation_shader qualifiers
+    EvqPatchIn,
+    EvqPatchOut,
+
+    EvqTessControlIn,
+    EvqTessControlOut,
+    EvqPerVertexOut,
+    EvqPatchVerticesIn,
+    EvqTessLevelOuter,
+    EvqTessLevelInner,
+
+    EvqTessEvaluationIn,
+    EvqTessEvaluationOut,
+    EvqTessCoord,
 
     // end of list
     EvqLast
@@ -1064,6 +1088,26 @@ inline bool IsShaderOut(TQualifier qualifier)
         case EvqNoPerspectiveOut:
         case EvqCentroidOut:
         case EvqSampleOut:
+            return true;
+        default:
+            return false;
+    }
+}
+
+inline bool IsShaderIoBlock(TQualifier qualifier)
+{
+    switch (qualifier)
+    {
+        case EvqPerVertexIn:
+        case EvqPerVertexOut:
+        case EvqVertexOut:
+        case EvqTessControlIn:
+        case EvqTessControlOut:
+        case EvqTessEvaluationIn:
+        case EvqTessEvaluationOut:
+        case EvqGeometryIn:
+        case EvqGeometryOut:
+        case EvqFragmentIn:
             return true;
         default:
             return false;
@@ -1340,6 +1384,11 @@ inline const char *getQualifierString(TQualifier q)
     case EvqSample:                 return "sample";
     case EvqSampleIn:               return "sample in";
     case EvqSampleOut:              return "sample out";
+    case EvqSampleID:               return "SampleID";
+    case EvqSamplePosition:         return "SamplePosition";
+    case EvqSampleMaskIn:           return "SampleMaskIn";
+    case EvqSampleMask:             return "SampleMask";
+    case EvqNumSamples:             return "NumSamples";
     default: UNREACHABLE();         return "unknown qualifier";
     }
     // clang-format on

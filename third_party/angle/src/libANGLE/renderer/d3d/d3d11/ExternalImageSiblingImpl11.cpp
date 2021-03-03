@@ -52,6 +52,9 @@ egl::Error ExternalImageSiblingImpl11::initialize(const egl::Display *display)
     mIsTexturable = (textureDesc.BindFlags & D3D11_BIND_SHADER_RESOURCE) &&
                     (resourceUsage & DXGI_USAGE_SHADER_INPUT);
 
+    mYUV = (textureDesc.Format == DXGI_FORMAT_NV12 || textureDesc.Format == DXGI_FORMAT_P010 ||
+            textureDesc.Format == DXGI_FORMAT_P016);
+
     return egl::NoError();
 }
 
@@ -68,6 +71,11 @@ bool ExternalImageSiblingImpl11::isRenderable(const gl::Context *context) const
 bool ExternalImageSiblingImpl11::isTexturable(const gl::Context *context) const
 {
     return mIsTexturable;
+}
+
+bool ExternalImageSiblingImpl11::isYUV() const
+{
+    return mYUV;
 }
 
 gl::Extents ExternalImageSiblingImpl11::getSize() const

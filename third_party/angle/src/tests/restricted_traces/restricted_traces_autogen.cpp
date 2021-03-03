@@ -20,16 +20,23 @@
 #include "dragon_ball_legends/dragon_ball_legends_capture_context1.h"
 #include "egypt_1500/egypt_1500_capture_context1.h"
 #include "fate_grand_order/fate_grand_order_capture_context1.h"
+#include "fifa_mobile/fifa_mobile_capture_context2.h"
 #include "free_fire/free_fire_capture_context1.h"
+#include "google_maps/google_maps_capture_context3.h"
 #include "kartrider_rush/kartrider_rush_capture_context1.h"
+#include "lego_legacy/lego_legacy_capture_context2.h"
 #include "manhattan_10/manhattan_10_capture_context1.h"
 #include "marvel_contest_of_champions/marvel_contest_of_champions_capture_context1.h"
 #include "mobile_legends/mobile_legends_capture_context1.h"
 #include "nba2k20_800/nba2k20_800_capture_context1.h"
 #include "pubg_mobile_lite/pubg_mobile_lite_capture_context1.h"
+#include "real_commando_secret_mission/real_commando_secret_mission_capture_context1.h"
+#include "saint_seiya_awakening/saint_seiya_awakening_capture_context2.h"
 #include "temple_run_300/temple_run_300_capture_context1.h"
 #include "trex_200/trex_200_capture_context1.h"
+#include "whatsapp/whatsapp_capture_context1.h"
 #include "world_of_tanks_blitz/world_of_tanks_blitz_capture_context1.h"
+#include "world_war_doh/world_war_doh_capture_context2.h"
 
 namespace angle
 {
@@ -69,13 +76,22 @@ constexpr angle::PackedEnumMap<RestrictedTraceID, TraceInfo> kTraceInfos = {
      {fate_grand_order::kReplayFrameStart, fate_grand_order::kReplayFrameEnd,
       fate_grand_order::kReplayDrawSurfaceWidth, fate_grand_order::kReplayDrawSurfaceHeight,
       "fate_grand_order"}},
+    {RestrictedTraceID::fifa_mobile,
+     {fifa_mobile::kReplayFrameStart, fifa_mobile::kReplayFrameEnd,
+      fifa_mobile::kReplayDrawSurfaceWidth, fifa_mobile::kReplayDrawSurfaceHeight, "fifa_mobile"}},
     {RestrictedTraceID::free_fire,
      {free_fire::kReplayFrameStart, free_fire::kReplayFrameEnd, free_fire::kReplayDrawSurfaceWidth,
       free_fire::kReplayDrawSurfaceHeight, "free_fire"}},
+    {RestrictedTraceID::google_maps,
+     {google_maps::kReplayFrameStart, google_maps::kReplayFrameEnd,
+      google_maps::kReplayDrawSurfaceWidth, google_maps::kReplayDrawSurfaceHeight, "google_maps"}},
     {RestrictedTraceID::kartrider_rush,
      {kartrider_rush::kReplayFrameStart, kartrider_rush::kReplayFrameEnd,
       kartrider_rush::kReplayDrawSurfaceWidth, kartrider_rush::kReplayDrawSurfaceHeight,
       "kartrider_rush"}},
+    {RestrictedTraceID::lego_legacy,
+     {lego_legacy::kReplayFrameStart, lego_legacy::kReplayFrameEnd,
+      lego_legacy::kReplayDrawSurfaceWidth, lego_legacy::kReplayDrawSurfaceHeight, "lego_legacy"}},
     {RestrictedTraceID::manhattan_10,
      {manhattan_10::kReplayFrameStart, manhattan_10::kReplayFrameEnd,
       manhattan_10::kReplayDrawSurfaceWidth, manhattan_10::kReplayDrawSurfaceHeight,
@@ -95,6 +111,15 @@ constexpr angle::PackedEnumMap<RestrictedTraceID, TraceInfo> kTraceInfos = {
      {pubg_mobile_lite::kReplayFrameStart, pubg_mobile_lite::kReplayFrameEnd,
       pubg_mobile_lite::kReplayDrawSurfaceWidth, pubg_mobile_lite::kReplayDrawSurfaceHeight,
       "pubg_mobile_lite"}},
+    {RestrictedTraceID::real_commando_secret_mission,
+     {real_commando_secret_mission::kReplayFrameStart,
+      real_commando_secret_mission::kReplayFrameEnd,
+      real_commando_secret_mission::kReplayDrawSurfaceWidth,
+      real_commando_secret_mission::kReplayDrawSurfaceHeight, "real_commando_secret_mission"}},
+    {RestrictedTraceID::saint_seiya_awakening,
+     {saint_seiya_awakening::kReplayFrameStart, saint_seiya_awakening::kReplayFrameEnd,
+      saint_seiya_awakening::kReplayDrawSurfaceWidth,
+      saint_seiya_awakening::kReplayDrawSurfaceHeight, "saint_seiya_awakening"}},
     {RestrictedTraceID::temple_run_300,
      {temple_run_300::kReplayFrameStart, temple_run_300::kReplayFrameEnd,
       temple_run_300::kReplayDrawSurfaceWidth, temple_run_300::kReplayDrawSurfaceHeight,
@@ -102,10 +127,17 @@ constexpr angle::PackedEnumMap<RestrictedTraceID, TraceInfo> kTraceInfos = {
     {RestrictedTraceID::trex_200,
      {trex_200::kReplayFrameStart, trex_200::kReplayFrameEnd, trex_200::kReplayDrawSurfaceWidth,
       trex_200::kReplayDrawSurfaceHeight, "trex_200"}},
+    {RestrictedTraceID::whatsapp,
+     {whatsapp::kReplayFrameStart, whatsapp::kReplayFrameEnd, whatsapp::kReplayDrawSurfaceWidth,
+      whatsapp::kReplayDrawSurfaceHeight, "whatsapp"}},
     {RestrictedTraceID::world_of_tanks_blitz,
      {world_of_tanks_blitz::kReplayFrameStart, world_of_tanks_blitz::kReplayFrameEnd,
       world_of_tanks_blitz::kReplayDrawSurfaceWidth, world_of_tanks_blitz::kReplayDrawSurfaceHeight,
-      "world_of_tanks_blitz"}}};
+      "world_of_tanks_blitz"}},
+    {RestrictedTraceID::world_war_doh,
+     {world_war_doh::kReplayFrameStart, world_war_doh::kReplayFrameEnd,
+      world_war_doh::kReplayDrawSurfaceWidth, world_war_doh::kReplayDrawSurfaceHeight,
+      "world_war_doh"}}};
 }
 
 const TraceInfo &GetTraceInfo(RestrictedTraceID traceID)
@@ -144,11 +176,20 @@ void ReplayFrame(RestrictedTraceID traceID, uint32_t frameIndex)
         case RestrictedTraceID::fate_grand_order:
             fate_grand_order::ReplayContext1Frame(frameIndex);
             break;
+        case RestrictedTraceID::fifa_mobile:
+            fifa_mobile::ReplayContext2Frame(frameIndex);
+            break;
         case RestrictedTraceID::free_fire:
             free_fire::ReplayContext1Frame(frameIndex);
             break;
+        case RestrictedTraceID::google_maps:
+            google_maps::ReplayContext3Frame(frameIndex);
+            break;
         case RestrictedTraceID::kartrider_rush:
             kartrider_rush::ReplayContext1Frame(frameIndex);
+            break;
+        case RestrictedTraceID::lego_legacy:
+            lego_legacy::ReplayContext2Frame(frameIndex);
             break;
         case RestrictedTraceID::manhattan_10:
             manhattan_10::ReplayContext1Frame(frameIndex);
@@ -165,14 +206,26 @@ void ReplayFrame(RestrictedTraceID traceID, uint32_t frameIndex)
         case RestrictedTraceID::pubg_mobile_lite:
             pubg_mobile_lite::ReplayContext1Frame(frameIndex);
             break;
+        case RestrictedTraceID::real_commando_secret_mission:
+            real_commando_secret_mission::ReplayContext1Frame(frameIndex);
+            break;
+        case RestrictedTraceID::saint_seiya_awakening:
+            saint_seiya_awakening::ReplayContext2Frame(frameIndex);
+            break;
         case RestrictedTraceID::temple_run_300:
             temple_run_300::ReplayContext1Frame(frameIndex);
             break;
         case RestrictedTraceID::trex_200:
             trex_200::ReplayContext1Frame(frameIndex);
             break;
+        case RestrictedTraceID::whatsapp:
+            whatsapp::ReplayContext1Frame(frameIndex);
+            break;
         case RestrictedTraceID::world_of_tanks_blitz:
             world_of_tanks_blitz::ReplayContext1Frame(frameIndex);
+            break;
+        case RestrictedTraceID::world_war_doh:
+            world_war_doh::ReplayContext2Frame(frameIndex);
             break;
         default:
             fprintf(stderr, "Error in switch.\n");
@@ -212,11 +265,20 @@ void ResetReplay(RestrictedTraceID traceID)
         case RestrictedTraceID::fate_grand_order:
             fate_grand_order::ResetContext1Replay();
             break;
+        case RestrictedTraceID::fifa_mobile:
+            fifa_mobile::ResetContext2Replay();
+            break;
         case RestrictedTraceID::free_fire:
             free_fire::ResetContext1Replay();
             break;
+        case RestrictedTraceID::google_maps:
+            google_maps::ResetContext3Replay();
+            break;
         case RestrictedTraceID::kartrider_rush:
             kartrider_rush::ResetContext1Replay();
+            break;
+        case RestrictedTraceID::lego_legacy:
+            lego_legacy::ResetContext2Replay();
             break;
         case RestrictedTraceID::manhattan_10:
             manhattan_10::ResetContext1Replay();
@@ -233,14 +295,26 @@ void ResetReplay(RestrictedTraceID traceID)
         case RestrictedTraceID::pubg_mobile_lite:
             pubg_mobile_lite::ResetContext1Replay();
             break;
+        case RestrictedTraceID::real_commando_secret_mission:
+            real_commando_secret_mission::ResetContext1Replay();
+            break;
+        case RestrictedTraceID::saint_seiya_awakening:
+            saint_seiya_awakening::ResetContext2Replay();
+            break;
         case RestrictedTraceID::temple_run_300:
             temple_run_300::ResetContext1Replay();
             break;
         case RestrictedTraceID::trex_200:
             trex_200::ResetContext1Replay();
             break;
+        case RestrictedTraceID::whatsapp:
+            whatsapp::ResetContext1Replay();
+            break;
         case RestrictedTraceID::world_of_tanks_blitz:
             world_of_tanks_blitz::ResetContext1Replay();
+            break;
+        case RestrictedTraceID::world_war_doh:
+            world_war_doh::ResetContext2Replay();
             break;
         default:
             fprintf(stderr, "Error in switch.\n");
@@ -280,11 +354,20 @@ void SetupReplay(RestrictedTraceID traceID)
         case RestrictedTraceID::fate_grand_order:
             fate_grand_order::SetupContext1Replay();
             break;
+        case RestrictedTraceID::fifa_mobile:
+            fifa_mobile::SetupContext2Replay();
+            break;
         case RestrictedTraceID::free_fire:
             free_fire::SetupContext1Replay();
             break;
+        case RestrictedTraceID::google_maps:
+            google_maps::SetupContext3Replay();
+            break;
         case RestrictedTraceID::kartrider_rush:
             kartrider_rush::SetupContext1Replay();
+            break;
+        case RestrictedTraceID::lego_legacy:
+            lego_legacy::SetupContext2Replay();
             break;
         case RestrictedTraceID::manhattan_10:
             manhattan_10::SetupContext1Replay();
@@ -301,14 +384,26 @@ void SetupReplay(RestrictedTraceID traceID)
         case RestrictedTraceID::pubg_mobile_lite:
             pubg_mobile_lite::SetupContext1Replay();
             break;
+        case RestrictedTraceID::real_commando_secret_mission:
+            real_commando_secret_mission::SetupContext1Replay();
+            break;
+        case RestrictedTraceID::saint_seiya_awakening:
+            saint_seiya_awakening::SetupContext2Replay();
+            break;
         case RestrictedTraceID::temple_run_300:
             temple_run_300::SetupContext1Replay();
             break;
         case RestrictedTraceID::trex_200:
             trex_200::SetupContext1Replay();
             break;
+        case RestrictedTraceID::whatsapp:
+            whatsapp::SetupContext1Replay();
+            break;
         case RestrictedTraceID::world_of_tanks_blitz:
             world_of_tanks_blitz::SetupContext1Replay();
+            break;
+        case RestrictedTraceID::world_war_doh:
+            world_war_doh::SetupContext2Replay();
             break;
         default:
             fprintf(stderr, "Error in switch.\n");
@@ -348,11 +443,20 @@ void SetBinaryDataDir(RestrictedTraceID traceID, const char *dataDir)
         case RestrictedTraceID::fate_grand_order:
             fate_grand_order::SetBinaryDataDir(dataDir);
             break;
+        case RestrictedTraceID::fifa_mobile:
+            fifa_mobile::SetBinaryDataDir(dataDir);
+            break;
         case RestrictedTraceID::free_fire:
             free_fire::SetBinaryDataDir(dataDir);
             break;
+        case RestrictedTraceID::google_maps:
+            google_maps::SetBinaryDataDir(dataDir);
+            break;
         case RestrictedTraceID::kartrider_rush:
             kartrider_rush::SetBinaryDataDir(dataDir);
+            break;
+        case RestrictedTraceID::lego_legacy:
+            lego_legacy::SetBinaryDataDir(dataDir);
             break;
         case RestrictedTraceID::manhattan_10:
             manhattan_10::SetBinaryDataDir(dataDir);
@@ -369,14 +473,26 @@ void SetBinaryDataDir(RestrictedTraceID traceID, const char *dataDir)
         case RestrictedTraceID::pubg_mobile_lite:
             pubg_mobile_lite::SetBinaryDataDir(dataDir);
             break;
+        case RestrictedTraceID::real_commando_secret_mission:
+            real_commando_secret_mission::SetBinaryDataDir(dataDir);
+            break;
+        case RestrictedTraceID::saint_seiya_awakening:
+            saint_seiya_awakening::SetBinaryDataDir(dataDir);
+            break;
         case RestrictedTraceID::temple_run_300:
             temple_run_300::SetBinaryDataDir(dataDir);
             break;
         case RestrictedTraceID::trex_200:
             trex_200::SetBinaryDataDir(dataDir);
             break;
+        case RestrictedTraceID::whatsapp:
+            whatsapp::SetBinaryDataDir(dataDir);
+            break;
         case RestrictedTraceID::world_of_tanks_blitz:
             world_of_tanks_blitz::SetBinaryDataDir(dataDir);
+            break;
+        case RestrictedTraceID::world_war_doh:
+            world_war_doh::SetBinaryDataDir(dataDir);
             break;
         default:
             fprintf(stderr, "Error in switch.\n");
@@ -416,11 +532,20 @@ void SetBinaryDataDecompressCallback(RestrictedTraceID traceID, DecompressCallba
         case RestrictedTraceID::fate_grand_order:
             fate_grand_order::SetBinaryDataDecompressCallback(callback);
             break;
+        case RestrictedTraceID::fifa_mobile:
+            fifa_mobile::SetBinaryDataDecompressCallback(callback);
+            break;
         case RestrictedTraceID::free_fire:
             free_fire::SetBinaryDataDecompressCallback(callback);
             break;
+        case RestrictedTraceID::google_maps:
+            google_maps::SetBinaryDataDecompressCallback(callback);
+            break;
         case RestrictedTraceID::kartrider_rush:
             kartrider_rush::SetBinaryDataDecompressCallback(callback);
+            break;
+        case RestrictedTraceID::lego_legacy:
+            lego_legacy::SetBinaryDataDecompressCallback(callback);
             break;
         case RestrictedTraceID::manhattan_10:
             manhattan_10::SetBinaryDataDecompressCallback(callback);
@@ -437,14 +562,26 @@ void SetBinaryDataDecompressCallback(RestrictedTraceID traceID, DecompressCallba
         case RestrictedTraceID::pubg_mobile_lite:
             pubg_mobile_lite::SetBinaryDataDecompressCallback(callback);
             break;
+        case RestrictedTraceID::real_commando_secret_mission:
+            real_commando_secret_mission::SetBinaryDataDecompressCallback(callback);
+            break;
+        case RestrictedTraceID::saint_seiya_awakening:
+            saint_seiya_awakening::SetBinaryDataDecompressCallback(callback);
+            break;
         case RestrictedTraceID::temple_run_300:
             temple_run_300::SetBinaryDataDecompressCallback(callback);
             break;
         case RestrictedTraceID::trex_200:
             trex_200::SetBinaryDataDecompressCallback(callback);
             break;
+        case RestrictedTraceID::whatsapp:
+            whatsapp::SetBinaryDataDecompressCallback(callback);
+            break;
         case RestrictedTraceID::world_of_tanks_blitz:
             world_of_tanks_blitz::SetBinaryDataDecompressCallback(callback);
+            break;
+        case RestrictedTraceID::world_war_doh:
+            world_war_doh::SetBinaryDataDecompressCallback(callback);
             break;
         default:
             fprintf(stderr, "Error in switch.\n");

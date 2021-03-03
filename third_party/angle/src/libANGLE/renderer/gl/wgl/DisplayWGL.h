@@ -63,8 +63,6 @@ class DisplayWGL : public DisplayGL
                                     EGLClientBuffer clientBuffer,
                                     const egl::AttributeMap &attribs) const override;
 
-    DeviceImpl *createDevice() override;
-
     std::string getVendorString() const override;
 
     egl::Error waitClient(const gl::Context *context) override;
@@ -120,7 +118,7 @@ class DisplayWGL : public DisplayGL
         HDC dc     = nullptr;
         HGLRC glrc = nullptr;
     };
-    std::unordered_map<std::thread::id, CurrentNativeContext> mCurrentData;
+    angle::HashMap<std::thread::id, CurrentNativeContext> mCurrentNativeContexts;
 
     HMODULE mOpenGLModule;
 

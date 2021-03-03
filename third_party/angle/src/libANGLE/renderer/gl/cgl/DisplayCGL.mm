@@ -148,6 +148,7 @@ DisplayCGL::DisplayCGL(const egl::DisplayState &state)
     : DisplayGL(state),
       mEGLDisplay(nullptr),
       mContext(nullptr),
+      mThreadsWithCurrentContext(),
       mPixelFormat(nullptr),
       mSupportsGPUSwitching(false),
       mCurrentGPUID(0),
@@ -479,7 +480,6 @@ void DisplayCGL::generateExtensions(egl::DisplayExtensions *outExtensions) const
 {
     outExtensions->iosurfaceClientBuffer = true;
     outExtensions->surfacelessContext    = true;
-    outExtensions->deviceQuery           = true;
 
     // Contexts are virtualized so textures and semaphores can be shared globally
     outExtensions->displayTextureShareGroup   = true;

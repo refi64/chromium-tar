@@ -2078,6 +2078,27 @@ std::unique_ptr<LinkEvent> ProgramD3D::link(const gl::Context *context,
                 shadersD3D[shaderType]->generateWorkarounds(&mShaderWorkarounds[shaderType]);
 
                 mShaderUniformsDirty.set(shaderType);
+
+                const std::set<std::string> &slowCompilingUniformBlockSet =
+                    shadersD3D[shaderType]->getSlowCompilingUniformBlockSet();
+                if (slowCompilingUniformBlockSet.size() > 0)
+                {
+                    std::ostringstream stream;
+                    stream << "You could get a better shader compiling performance if you re-write"
+                           << " the uniform block(s)\n[ ";
+                    for (const std::string &str : slowCompilingUniformBlockSet)
+                    {
+                        stream << str << " ";
+                    }
+                    stream << "]\nin the " << gl::GetShaderTypeString(shaderType) << " shader.\n";
+
+                    stream << "You could get more details from "
+                              "https://chromium.googlesource.com/angle/angle/+/refs/heads/master/"
+                              "src/libANGLE/renderer/d3d/d3d11/"
+                              "UniformBlockToStructuredBufferTranslation.md\n";
+                    ANGLE_PERF_WARNING(context->getState().getDebug(), GL_DEBUG_SEVERITY_MEDIUM,
+                                       stream.str().c_str());
+                }
             }
         }
 
@@ -2091,11 +2112,14 @@ std::unique_ptr<LinkEvent> ProgramD3D::link(const gl::Context *context,
             }
         }
 
-        ProgramD3DMetadata metadata(mRenderer, shadersD3D, context->getClientType());
-        BuiltinVaryingsD3D builtins(metadata, resources.varyingPacking);
+        const gl::VaryingPacking &varyingPacking =
+            resources.varyingPacking.getOutputPacking(gl::ShaderType::Vertex);
 
-        mDynamicHLSL->generateShaderLinkHLSL(context->getCaps(), mState, metadata,
-                                             resources.varyingPacking, builtins, &mShaderHLSL);
+        ProgramD3DMetadata metadata(mRenderer, shadersD3D, context->getClientType());
+        BuiltinVaryingsD3D builtins(metadata, varyingPacking);
+
+        mDynamicHLSL->generateShaderLinkHLSL(context->getCaps(), mState, metadata, varyingPacking,
+                                             builtins, &mShaderHLSL);
 
         const ShaderD3D *vertexShader = shadersD3D[gl::ShaderType::Vertex];
         mUsesPointSize                = vertexShader && vertexShader->usesPointSize();
@@ -2111,7 +2135,7 @@ std::unique_ptr<LinkEvent> ProgramD3D::link(const gl::Context *context,
         if (mRenderer->getMajorShaderModel() >= 4)
         {
             mGeometryShaderPreamble = mDynamicHLSL->generateGeometryShaderPreamble(
-                resources.varyingPacking, builtins, mHasANGLEMultiviewEnabled,
+                varyingPacking, builtins, mHasANGLEMultiviewEnabled,
                 metadata.canSelectViewInVertexShader());
         }
 
@@ -2119,7 +2143,7 @@ std::unique_ptr<LinkEvent> ProgramD3D::link(const gl::Context *context,
 
         defineUniformsAndAssignRegisters();
 
-        gatherTransformFeedbackVaryings(resources.varyingPacking, builtins[gl::ShaderType::Vertex]);
+        gatherTransformFeedbackVaryings(varyingPacking, builtins[gl::ShaderType::Vertex]);
 
         linkResources(resources);
 

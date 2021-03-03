@@ -26,7 +26,7 @@
 
 // Version number for shader translation API.
 // It is incremented every time the API changes.
-#define ANGLE_SH_VERSION 239
+#define ANGLE_SH_VERSION 248
 
 enum ShShaderSpec
 {
@@ -38,6 +38,8 @@ enum ShShaderSpec
 
     SH_GLES3_1_SPEC,
     SH_WEBGL3_SPEC,
+
+    SH_GLES3_2_SPEC,
 
     SH_GL_CORE_SPEC,
     SH_GL_COMPATIBILITY_SPEC,
@@ -341,6 +343,14 @@ const ShCompileOptions SH_EARLY_FRAGMENT_TESTS_OPTIMIZATION = UINT64_C(1) << 55;
 // Allow compiler to insert Android pre-rotation code.
 const ShCompileOptions SH_ADD_PRE_ROTATION = UINT64_C(1) << 56;
 
+const ShCompileOptions SH_FORCE_SHADER_PRECISION_HIGHP_TO_MEDIUMP = UINT64_C(1) << 57;
+
+// Allow compiler to use specialization constant to do pre-rotation and y flip.
+const ShCompileOptions SH_USE_SPECIALIZATION_CONSTANT = UINT64_C(1) << 58;
+
+// Ask compiler to generate transform feedback emulation support code.
+const ShCompileOptions SH_ADD_VULKAN_XFB_EMULATION_SUPPORT_CODE = UINT64_C(1) << 59;
+
 // Defines alternate strategies for implementing array index clamping.
 enum ShArrayIndexClampingStrategy
 {
@@ -393,6 +403,8 @@ struct ShBuiltInResources
     int EXT_multisampled_render_to_texture2;
     int EXT_YUV_target;
     int EXT_geometry_shader;
+    int OES_shader_io_blocks;
+    int EXT_shader_io_blocks;
     int EXT_gpu_shader5;
     int EXT_shader_non_constant_global_initializers;
     int OES_texture_storage_multisample_2d_array;
@@ -407,8 +419,11 @@ struct ShBuiltInResources
     int EXT_shadow_samplers;
     int OES_shader_multisample_interpolation;
     int OES_shader_image_atomic;
+    int EXT_tessellation_shader;
     int OES_texture_buffer;
     int EXT_texture_buffer;
+    int OES_sample_variables;
+    int EXT_clip_cull_distance;
 
     // Set to 1 to enable replacing GL_EXT_draw_buffers #extension directives
     // with GL_NV_draw_buffers in ESSL output. This flag can be used to emulate
@@ -465,6 +480,10 @@ struct ShBuiltInResources
 
     // maximum number of available image units
     int MaxImageUnits;
+
+    // OES_sample_variables constant
+    // maximum number of available samples
+    int MaxSamples;
 
     // maximum number of image uniforms in a vertex shader
     int MaxVertexImageUniforms;
@@ -548,11 +567,35 @@ struct ShBuiltInResources
     int MaxGeometryShaderInvocations;
     int MaxGeometryImageUniforms;
 
+    // EXT_tessellation_shader constants
+    int MaxTessControlInputComponents;
+    int MaxTessControlOutputComponents;
+    int MaxTessControlTextureImageUnits;
+    int MaxTessControlUniformComponents;
+    int MaxTessControlTotalOutputComponents;
+    int MaxTessControlImageUniforms;
+    int MaxTessControlAtomicCounters;
+    int MaxTessControlAtomicCounterBuffers;
+
+    int MaxTessPatchComponents;
+    int MaxPatchVertices;
+    int MaxTessGenLevel;
+
+    int MaxTessEvaluationInputComponents;
+    int MaxTessEvaluationOutputComponents;
+    int MaxTessEvaluationTextureImageUnits;
+    int MaxTessEvaluationUniformComponents;
+    int MaxTessEvaluationImageUniforms;
+    int MaxTessEvaluationAtomicCounters;
+    int MaxTessEvaluationAtomicCounterBuffers;
+
     // Subpixel bits used in rasterization.
     int SubPixelBits;
 
     // APPLE_clip_distance/EXT_clip_cull_distance constant
     int MaxClipDistances;
+    int MaxCullDistances;
+    int MaxCombinedClipAndCullDistances;
 };
 
 //
@@ -685,6 +728,9 @@ int GetVertexShaderNumViews(const ShHandle handle);
 // Returns true if compiler has injected instructions for early fragment tests as an optimization
 bool HasEarlyFragmentTestsOptimization(const ShHandle handle);
 
+// Returns specialization constant usage bits
+uint32_t GetShaderSpecConstUsageBits(const ShHandle handle);
+
 // Returns true if the passed in variables pack in maxVectors followingthe packing rules from the
 // GLSL 1.017 spec, Appendix A, section 7.
 // Returns false otherwise. Also look at the SH_ENFORCE_PACKING_RESTRICTIONS
@@ -719,6 +765,7 @@ bool GetUniformBlockRegister(const ShHandle handle,
 
 bool ShouldUniformBlockUseStructuredBuffer(const ShHandle handle,
                                            const std::string &uniformBlockName);
+const std::set<std::string> *GetSlowCompilingUniformBlockSet(const ShHandle handle);
 
 // Gives a map from uniform names to compiler-assigned registers in the default uniform block.
 // Note that the map contains also registers of samplers that have been extracted from structs.
@@ -775,8 +822,36 @@ enum class SpecializationConstantId : uint32_t
 {
     LineRasterEmulation = 0,
     SurfaceRotation     = 1,
+    DrawableWidth       = 2,
+    DrawableHeight      = 3,
 
-    InvalidEnum = 2,
+    InvalidEnum = 4,
+    EnumCount   = InvalidEnum,
+};
+
+enum class SurfaceRotation : uint32_t
+{
+    Identity,
+    Rotated90Degrees,
+    Rotated180Degrees,
+    Rotated270Degrees,
+    FlippedIdentity,
+    FlippedRotated90Degrees,
+    FlippedRotated180Degrees,
+    FlippedRotated270Degrees,
+
+    InvalidEnum,
+    EnumCount = InvalidEnum,
+};
+
+enum class SpecConstUsage : uint32_t
+{
+    LineRasterEmulation = 0,
+    YFlip               = 1,
+    Rotation            = 2,
+    DrawableSize        = 3,
+
+    InvalidEnum = 4,
     EnumCount   = InvalidEnum,
 };
 
@@ -797,6 +872,9 @@ extern const char kAtomicCountersBlockName[];
 
 // Line raster emulation varying
 extern const char kLineRasterEmulationPosition[];
+
+// Transform feedback emulation helper function
+extern const char kXfbEmulationGetOffsetsFunctionName[];
 
 }  // namespace vk
 

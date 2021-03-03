@@ -82,18 +82,66 @@ bool IsTextureLevelDefinitionCompatibleWithImage(const vk::ImageHelper &image,
     return size == image.getLevelExtents(imageLevelIndexVk) && format == image.getFormat();
 }
 
+bool CanCopyWithTransferForTexImage(RendererVk *renderer,
+                                    const vk::Format &srcFormat,
+                                    VkImageTiling srcTilingMode,
+                                    const vk::Format &destFormat,
+                                    VkImageTiling destTilingMode)
+{
+    // For glTex[Sub]Image, only accept same-format transfers.
+    bool isFormatCompatible = srcFormat.intendedFormatID == destFormat.intendedFormatID;
+
+    return isFormatCompatible &&
+           vk::CanCopyWithTransfer(renderer, srcFormat, srcTilingMode, destFormat, destTilingMode);
+}
+
 bool CanCopyWithTransferForCopyTexture(RendererVk *renderer,
                                        const vk::Format &srcFormat,
                                        VkImageTiling srcTilingMode,
                                        const vk::Format &destFormat,
                                        VkImageTiling destTilingMode)
 {
-    // NOTE(syoussefi): technically, you can transfer between formats as long as they have the same
-    // size and are compatible, but for now, let's just support same-format copies with transfer.
-    bool isFormatCompatible = srcFormat.internalFormat == destFormat.internalFormat;
+    if (!vk::CanCopyWithTransfer(renderer, srcFormat, srcTilingMode, destFormat, destTilingMode))
+    {
+        return false;
+    }
 
-    return isFormatCompatible &&
-           vk::CanCopyWithTransfer(renderer, srcFormat, srcTilingMode, destFormat, destTilingMode);
+    // If the formats are identical, we can always transfer between them.
+    if (srcFormat.intendedFormatID == destFormat.intendedFormatID)
+    {
+        return true;
+    }
+
+    // If either format is emulated, cannot transfer.
+    if (srcFormat.hasEmulatedImageFormat() || destFormat.hasEmulatedImageFormat())
+    {
+        return false;
+    }
+
+    // Otherwise, allow transfer between compatible formats.  This is derived from the specification
+    // of CHROMIUM_copy_texture.
+    const angle::Format &srcAngleFormat  = srcFormat.actualImageFormat();
+    const angle::Format &destAngleFormat = destFormat.actualImageFormat();
+
+    const bool srcIsBGRA   = srcAngleFormat.isBGRA();
+    const bool srcHasR8    = srcAngleFormat.redBits == 8;
+    const bool srcHasG8    = srcAngleFormat.greenBits == 8;
+    const bool srcHasB8    = srcAngleFormat.blueBits == 8;
+    const bool srcHasA8    = srcAngleFormat.alphaBits == 8;
+    const bool srcIsSigned = srcAngleFormat.isSnorm() || srcAngleFormat.isSint();
+
+    const bool destIsBGRA   = destAngleFormat.isBGRA();
+    const bool destHasR8    = destAngleFormat.redBits == 8;
+    const bool destHasG8    = destAngleFormat.greenBits == 8;
+    const bool destHasB8    = destAngleFormat.blueBits == 8;
+    const bool destHasA8    = destAngleFormat.alphaBits == 8;
+    const bool destIsSigned = destAngleFormat.isSnorm() || destAngleFormat.isSint();
+
+    // Copy is allowed as long as they have the same number, ordering and sign of (8-bit) channels.
+    // CHROMIUM_copy_texture expects verbatim copy between these format, so this copy is done
+    // regardless of sRGB, normalized, etc.
+    return srcIsBGRA == destIsBGRA && srcHasR8 == destHasR8 && srcHasG8 == destHasG8 &&
+           srcHasB8 == destHasB8 && srcHasA8 == destHasA8 && srcIsSigned == destIsSigned;
 }
 
 bool CanCopyWithDraw(RendererVk *renderer,
@@ -103,10 +151,12 @@ bool CanCopyWithDraw(RendererVk *renderer,
                      VkImageTiling destTilingMode)
 {
     // Checks that the formats in copy by drawing have the appropriate feature bits
-    bool srcFormatHasNecessaryFeature = vk::FormatHasNecessaryFeature(
-        renderer, srcFormat.vkImageFormat, srcTilingMode, VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
-    bool dstFormatHasNecessaryFeature = vk::FormatHasNecessaryFeature(
-        renderer, destFormat.vkImageFormat, destTilingMode, VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT);
+    bool srcFormatHasNecessaryFeature =
+        vk::FormatHasNecessaryFeature(renderer, srcFormat.actualImageFormatID, srcTilingMode,
+                                      VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT);
+    bool dstFormatHasNecessaryFeature =
+        vk::FormatHasNecessaryFeature(renderer, destFormat.actualImageFormatID, destTilingMode,
+                                      VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT);
 
     return srcFormatHasNecessaryFeature && dstFormatHasNecessaryFeature;
 }
@@ -130,7 +180,7 @@ bool CanGenerateMipmapWithCompute(RendererVk *renderer,
 
     // Format must have STORAGE support.
     const bool hasStorageSupport = renderer->hasImageFormatFeatureBits(
-        format.vkImageFormat, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
+        format.actualImageFormatID, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT);
 
     // No support for sRGB formats yet.
     const bool isSRGB = angleFormat.isSRGB;
@@ -155,29 +205,36 @@ void GetRenderTargetLayerCountAndIndex(vk::ImageHelper *image,
                                        GLuint *layerCount,
                                        GLuint *layerIndex)
 {
+    // If the render target is to a single layer (usual case), index.hasLayer() is true.  If the
+    // render target is layered (used with geometry shaders), it would be false.  In the latter
+    // case, layerIndex is given the value of layerCount to signify this.  The arrays indexed by
+    // layerIndex therefore contain the layered render target as the last element.
     switch (index.getType())
     {
         case gl::TextureType::_2D:
         case gl::TextureType::_2DMultisample:
-            *layerIndex = 0;
             *layerCount = 1;
+            *layerIndex = 0;
             return;
 
         case gl::TextureType::CubeMap:
-            *layerIndex = index.cubeMapFaceIndex();
             *layerCount = gl::kCubeFaceCount;
+            *layerIndex = index.hasLayer() ? index.cubeMapFaceIndex() : *layerCount;
             return;
 
         case gl::TextureType::_3D:
-            *layerIndex = index.hasLayer() ? index.getLayerIndex() : 0;
-            *layerCount = index.hasLayer() ? image->getExtents().depth : 1;
+        {
+            gl::LevelIndex levelGL(index.getLevelIndex());
+            *layerCount = image->getLevelExtents(image->toVkLevel(levelGL)).depth;
+            *layerIndex = index.hasLayer() ? index.getLayerIndex() : *layerCount;
             return;
+        }
 
         case gl::TextureType::_2DArray:
         case gl::TextureType::_2DMultisampleArray:
         case gl::TextureType::CubeMapArray:
-            *layerIndex = index.hasLayer() ? index.getLayerIndex() : 0;
-            *layerCount = index.hasLayer() ? image->getLayerCount() : 1;
+            *layerCount = image->getLayerCount();
+            *layerIndex = index.hasLayer() ? index.getLayerIndex() : *layerCount;
             return;
 
         default:
@@ -230,7 +287,7 @@ angle::Result CopyAndStageImageSubresource(ContextVk *contextVk,
     // Stage an update to the new image
     ASSERT(stagingBuffer);
     const gl::InternalFormat &formatInfo =
-        gl::GetSizedInternalFormatInfo(dstImage->getFormat().internalFormat);
+        gl::GetSizedInternalFormatInfo(dstImage->getFormat().intendedGLFormat);
     uint32_t bufferRowLength;
     uint32_t bufferImageHeight;
     ANGLE_VK_CHECK_MATH(contextVk,
@@ -267,7 +324,7 @@ void TextureVk::onDestroy(const gl::Context *context)
 {
     ContextVk *contextVk = vk::GetImpl(context);
 
-    releaseAndDeleteImage(contextVk);
+    releaseAndDeleteImageAndViews(contextVk);
     mSampler.reset();
 }
 
@@ -374,9 +431,20 @@ bool TextureVk::isFastUnpackPossible(const vk::Format &vkFormat, size_t offset) 
     // Conditions to determine if fast unpacking is possible
     // 1. Image must be well defined to unpack directly to it
     //    TODO(http://anglebug.com/4222) Create and stage a temp image instead
-    // 2. Can't perform a fast copy for emulated formats
+    // 2. Can't perform a fast copy for depth/stencil, except from non-emulated depth or stencil
+    //    to emulated depth/stencil.  GL requires depth and stencil data to be packed, while Vulkan
+    //    requires them to be separate.
+    // 2. Can't perform a fast copy for emulated formats, except from non-emulated depth or stencil
+    //    to emulated depth/stencil.
     // 3. vkCmdCopyBufferToImage requires byte offset to be a multiple of 4
-    return mImage->valid() && vkFormat.intendedFormatID == vkFormat.actualImageFormatID &&
+    const angle::Format &bufferFormat = vkFormat.actualBufferFormat(false);
+    const bool isCombinedDepthStencil = bufferFormat.depthBits > 0 && bufferFormat.stencilBits > 0;
+    const bool isDepthXorStencil = (bufferFormat.depthBits > 0 && bufferFormat.stencilBits == 0) ||
+                                   (bufferFormat.depthBits == 0 && bufferFormat.stencilBits > 0);
+    const bool isCompatibleDepth = vkFormat.intendedFormat().depthBits == bufferFormat.depthBits;
+    return mImage->valid() && !isCombinedDepthStencil &&
+           (vkFormat.intendedFormatID == vkFormat.actualImageFormatID ||
+            (isDepthXorStencil && isCompatibleDepth)) &&
            (offset & (kBufferOffsetMultiple - 1)) == 0;
 }
 
@@ -439,11 +507,9 @@ angle::Result TextureVk::setSubImageImpl(const gl::Context *context,
         // Note: cannot directly copy from a depth/stencil PBO.  GL requires depth and stencil data
         // to be packed, while Vulkan requires them to be separate.
         const VkImageAspectFlags aspectFlags = vk::GetFormatAspectFlags(vkFormat.intendedFormat());
-        const bool isCombinedDepthStencil =
-            (aspectFlags & kDepthStencilAspects) == kDepthStencilAspects;
 
         if (!shouldUpdateBeStaged(gl::LevelIndex(index.getLevelIndex())) &&
-            isFastUnpackPossible(vkFormat, offsetBytes) && !isCombinedDepthStencil)
+            isFastUnpackPossible(vkFormat, offsetBytes))
         {
             GLuint pixelSize   = formatInfo.pixelBytes;
             GLuint blockWidth  = formatInfo.compressedBlockWidth;
@@ -697,8 +763,8 @@ angle::Result TextureVk::copySubImageImpl(const gl::Context *context,
                              clippedSourceArea.width, clippedSourceArea.height, 1);
 
     // If it's possible to perform the copy with a transfer, that's the best option.
-    if (!isViewportFlipY && CanCopyWithTransferForCopyTexture(renderer, srcFormat, srcTilingMode,
-                                                              destFormat, destTilingMode))
+    if (!isViewportFlipY && CanCopyWithTransferForTexImage(renderer, srcFormat, srcTilingMode,
+                                                           destFormat, destTilingMode))
     {
         return copySubImageImplWithTransfer(contextVk, offsetImageIndex, modifiedDestOffset,
                                             destFormat, colorReadRT->getLevelIndex(),
@@ -905,7 +971,8 @@ angle::Result TextureVk::copySubImageImplWithTransfer(ContextVk *contextVk,
     gl::Extents extents  = {sourceBox.width, sourceBox.height, sourceBox.depth};
 
     // Change source layout if necessary
-    ANGLE_TRY(contextVk->onImageTransferRead(VK_IMAGE_ASPECT_COLOR_BIT, srcImage));
+    vk::CommandBufferAccess access;
+    access.onImageTransferRead(VK_IMAGE_ASPECT_COLOR_BIT, srcImage);
 
     VkImageSubresourceLayers srcSubresource = {};
     srcSubresource.aspectMask               = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -943,9 +1010,11 @@ angle::Result TextureVk::copySubImageImplWithTransfer(ContextVk *contextVk,
         // Make sure any updates to the image are already flushed.
         ANGLE_TRY(ensureImageInitialized(contextVk, ImageMipLevels::EnabledLevels));
 
-        ANGLE_TRY(contextVk->onImageTransferWrite(level, 1, baseLayer, layerCount,
-                                                  VK_IMAGE_ASPECT_COLOR_BIT, mImage));
-        vk::CommandBuffer &commandBuffer = contextVk->getOutsideRenderPassCommandBuffer();
+        access.onImageTransferWrite(level, 1, baseLayer, layerCount, VK_IMAGE_ASPECT_COLOR_BIT,
+                                    mImage);
+
+        vk::CommandBuffer *commandBuffer;
+        ANGLE_TRY(contextVk->getOutsideRenderPassCommandBuffer(access, &commandBuffer));
 
         VkImageSubresourceLayers destSubresource = srcSubresource;
         destSubresource.mipLevel                 = mImage->toVkLevel(level).get();
@@ -964,7 +1033,7 @@ angle::Result TextureVk::copySubImageImplWithTransfer(ContextVk *contextVk,
         }
 
         vk::ImageHelper::Copy(srcImage, mImage, srcOffset, destOffsetModified, extents,
-                              srcSubresource, destSubresource, &commandBuffer);
+                              srcSubresource, destSubresource, commandBuffer);
     }
     else
     {
@@ -977,9 +1046,11 @@ angle::Result TextureVk::copySubImageImplWithTransfer(ContextVk *contextVk,
                                               gl::Extents(sourceBox.width, sourceBox.height, 1),
                                               destFormat, kTransferStagingImageFlags, layerCount));
 
-        ANGLE_TRY(contextVk->onImageTransferWrite(gl::LevelIndex(0), 1, 0, layerCount,
-                                                  VK_IMAGE_ASPECT_COLOR_BIT, stagingImage.get()));
-        vk::CommandBuffer &commandBuffer = contextVk->getOutsideRenderPassCommandBuffer();
+        access.onImageTransferWrite(gl::LevelIndex(0), 1, 0, layerCount, VK_IMAGE_ASPECT_COLOR_BIT,
+                                    stagingImage.get());
+
+        vk::CommandBuffer *commandBuffer;
+        ANGLE_TRY(contextVk->getOutsideRenderPassCommandBuffer(access, &commandBuffer));
 
         VkImageSubresourceLayers destSubresource = srcSubresource;
         destSubresource.mipLevel                 = 0;
@@ -994,7 +1065,7 @@ angle::Result TextureVk::copySubImageImplWithTransfer(ContextVk *contextVk,
         }
 
         vk::ImageHelper::Copy(srcImage, stagingImage.get(), srcOffset, gl::kOffsetZero, extents,
-                              srcSubresource, destSubresource, &commandBuffer);
+                              srcSubresource, destSubresource, commandBuffer);
 
         // Stage the copy for when the image storage is actually created.
         VkImageType imageType = gl_vk::GetImageType(mState.getType());
@@ -1196,7 +1267,7 @@ angle::Result TextureVk::setStorageMultisample(const gl::Context *context,
 
     if (!mOwnsImage)
     {
-        releaseAndDeleteImage(contextVk);
+        releaseAndDeleteImageAndViews(contextVk);
     }
 
     const vk::Format &format = renderer->getFormat(internalformat);
@@ -1223,7 +1294,7 @@ angle::Result TextureVk::setStorageExternalMemory(const gl::Context *context,
     RendererVk *renderer           = contextVk->getRenderer();
     MemoryObjectVk *memoryObjectVk = vk::GetImpl(memoryObject);
 
-    releaseAndDeleteImage(contextVk);
+    releaseAndDeleteImageAndViews(contextVk);
 
     const vk::Format &format = renderer->getFormat(internalFormat);
 
@@ -1247,7 +1318,7 @@ angle::Result TextureVk::setEGLImageTarget(const gl::Context *context,
     ContextVk *contextVk = vk::GetImpl(context);
     RendererVk *renderer = contextVk->getRenderer();
 
-    releaseAndDeleteImage(contextVk);
+    releaseAndDeleteImageAndViews(contextVk);
 
     const vk::Format &format = renderer->getFormat(image->getFormat().info->sizedInternalFormat);
 
@@ -1280,9 +1351,10 @@ angle::Result TextureVk::setEGLImageTarget(const gl::Context *context,
             newLayout = vk::ImageLayout::AllGraphicsShadersReadOnly;
         }
 
-        vk::CommandBuffer &commandBuffer = contextVk->getOutsideRenderPassCommandBuffer();
+        vk::CommandBuffer *commandBuffer;
+        ANGLE_TRY(contextVk->getOutsideRenderPassCommandBuffer({}, &commandBuffer));
         mImage->changeLayoutAndQueue(mImage->getAspectFlags(), newLayout, rendererQueueFamilyIndex,
-                                     &commandBuffer);
+                                     commandBuffer);
     }
 
     return angle::Result::Continue;
@@ -1295,6 +1367,16 @@ angle::Result TextureVk::setImageExternal(const gl::Context *context,
 {
     ANGLE_VK_UNREACHABLE(vk::GetImpl(context));
     return angle::Result::Stop;
+}
+
+angle::Result TextureVk::setBuffer(const gl::Context *context, GLenum internalFormat)
+{
+    // No longer an image
+    releaseAndDeleteImageAndViews(vk::GetImpl(context));
+    mSampler.reset();
+
+    // There's nothing else to do here.
+    return angle::Result::Continue;
 }
 
 gl::ImageIndex TextureVk::getNativeImageIndex(const gl::ImageIndex &inputImageIndex) const
@@ -1328,7 +1410,7 @@ uint32_t TextureVk::getNativeImageLayer(uint32_t frontendLayer) const
     return frontendLayer + mImageLayerOffset;
 }
 
-void TextureVk::releaseAndDeleteImage(ContextVk *contextVk)
+void TextureVk::releaseAndDeleteImageAndViews(ContextVk *contextVk)
 {
     if (mImage)
     {
@@ -1339,6 +1421,7 @@ void TextureVk::releaseAndDeleteImage(ContextVk *contextVk)
         mImageCreateFlags       = 0;
         SafeDelete(mImage);
     }
+    mBufferViews.release(contextVk->getRenderer());
     mRedefinedLevels.reset();
 }
 
@@ -1353,13 +1436,13 @@ void TextureVk::initImageUsageFlags(ContextVk *contextVk, const vk::Format &form
     {
         // Work around a bug in the Mock ICD:
         // https://github.com/KhronosGroup/Vulkan-Tools/issues/445
-        if (renderer->hasImageFormatFeatureBits(format.vkImageFormat,
+        if (renderer->hasImageFormatFeatureBits(format.actualImageFormatID,
                                                 VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT))
         {
             mImageUsageFlags |= VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
         }
     }
-    else if (renderer->hasImageFormatFeatureBits(format.vkImageFormat,
+    else if (renderer->hasImageFormatFeatureBits(format.actualImageFormatID,
                                                  VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT))
     {
         mImageUsageFlags |=
@@ -1441,7 +1524,7 @@ angle::Result TextureVk::redefineLevel(const gl::Context *context,
 
     if (!mOwnsImage)
     {
-        releaseAndDeleteImage(contextVk);
+        releaseAndDeleteImageAndViews(contextVk);
     }
 
     if (mImage != nullptr)
@@ -1450,7 +1533,8 @@ angle::Result TextureVk::redefineLevel(const gl::Context *context,
         // override them with this call.
         gl::LevelIndex levelIndexGL(index.getLevelIndex());
         uint32_t layerIndex = index.hasLayer() ? index.getLayerIndex() : 0;
-        mImage->removeSingleSubresourceStagedUpdates(contextVk, levelIndexGL, layerIndex);
+        mImage->removeSingleSubresourceStagedUpdates(contextVk, levelIndexGL, layerIndex,
+                                                     index.getLayerCount());
 
         if (mImage->valid())
         {
@@ -1595,14 +1679,15 @@ angle::Result TextureVk::copyBufferDataToImage(ContextVk *contextVk,
     // Make sure the source is initialized and its images are flushed.
     ANGLE_TRY(ensureImageInitialized(contextVk, ImageMipLevels::EnabledLevels));
 
-    ANGLE_TRY(contextVk->onBufferTransferRead(srcBuffer));
-    ANGLE_TRY(contextVk->onImageTransferWrite(level, 1, layerIndex, layerCount,
-                                              mImage->getAspectFlags(), mImage));
+    vk::CommandBufferAccess access;
+    access.onBufferTransferRead(srcBuffer);
+    access.onImageTransferWrite(level, 1, layerIndex, layerCount, mImage->getAspectFlags(), mImage);
 
-    vk::CommandBuffer &commandBuffer = contextVk->getOutsideRenderPassCommandBuffer();
+    vk::CommandBuffer *commandBuffer;
+    ANGLE_TRY(contextVk->getOutsideRenderPassCommandBuffer(access, &commandBuffer));
 
-    commandBuffer.copyBufferToImage(srcBuffer->getBuffer().getHandle(), mImage->getImage(),
-                                    mImage->getCurrentLayout(), 1, &region);
+    commandBuffer->copyBufferToImage(srcBuffer->getBuffer().getHandle(), mImage->getImage(),
+                                     mImage->getCurrentLayout(), 1, &region);
 
     return angle::Result::Continue;
 }
@@ -1648,11 +1733,16 @@ angle::Result TextureVk::generateMipmapsWithCompute(ContextVk *contextVk)
          destBaseLevelVk < vk::LevelIndex(mImage->getLevelCount());
          destBaseLevelVk = destBaseLevelVk + maxGenerateLevels.get())
     {
+        vk::CommandBufferAccess access;
+
         uint32_t writeLevelCount =
             std::min(maxGenerateLevels.get(), mImage->getLevelCount() - destBaseLevelVk.get());
-        ANGLE_TRY(contextVk->onImageComputeShaderWrite(mImage->toGLLevel(destBaseLevelVk),
-                                                       writeLevelCount, 0, mImage->getLayerCount(),
-                                                       VK_IMAGE_ASPECT_COLOR_BIT, mImage));
+        access.onImageComputeShaderWrite(mImage->toGLLevel(destBaseLevelVk), writeLevelCount, 0,
+                                         mImage->getLayerCount(), VK_IMAGE_ASPECT_COLOR_BIT,
+                                         mImage);
+
+        vk::CommandBuffer *commandBuffer;
+        ANGLE_TRY(contextVk->getOutsideRenderPassCommandBuffer(access, &commandBuffer));
 
         // Generate mipmaps for every layer separately.
         for (uint32_t layer = 0; layer < mImage->getLayerCount(); ++layer)
@@ -1769,7 +1859,7 @@ angle::Result TextureVk::generateMipmap(const gl::Context *context)
 
         return generateMipmapsWithCompute(contextVk);
     }
-    else if (renderer->hasImageFormatFeatureBits(mImage->getFormat().vkImageFormat,
+    else if (renderer->hasImageFormatFeatureBits(mImage->getFormat().actualImageFormatID,
                                                  kBlitFeatureFlags))
     {
         // Otherwise, use blit if possible.
@@ -1866,11 +1956,11 @@ angle::Result TextureVk::copyAndStageImageData(ContextVk *contextVk,
             {
                 // Note: if this level is incompatibly redefined, there will necessarily be a
                 // staged update, and the contents of the image are to be thrown away.
-                ASSERT(srcImage->hasStagedUpdatesForSubresource(levelGL, layer));
+                ASSERT(srcImage->hasStagedUpdatesForSubresource(levelGL, layer, 1));
                 continue;
             }
 
-            ASSERT(!srcImage->hasStagedUpdatesForSubresource(levelGL, layer));
+            ASSERT(!srcImage->hasStagedUpdatesForSubresource(levelGL, layer, 1));
 
             // Pull data from the current image and stage it as an update for the new image
 
@@ -1965,7 +2055,7 @@ angle::Result TextureVk::bindTexImage(const gl::Context *context, egl::Surface *
     ContextVk *contextVk = vk::GetImpl(context);
     RendererVk *renderer = contextVk->getRenderer();
 
-    releaseAndDeleteImage(contextVk);
+    releaseAndDeleteImageAndViews(contextVk);
 
     GLenum internalFormat    = surface->getConfig()->renderTargetFormat;
     const vk::Format &format = renderer->getFormat(internalFormat);
@@ -2113,7 +2203,12 @@ angle::Result TextureVk::initRenderTargets(ContextVk *contextVk,
         return angle::Result::Continue;
     }
 
-    renderTargets.resize(layerCount);
+    // There are |layerCount| render targets, one for each layer.  There is also one render target
+    // viewing all layers.
+    renderTargets.resize(layerCount + 1);
+
+    const bool isMultisampledRenderToTexture =
+        renderToTextureIndex != gl::RenderToTextureImageIndex::Default;
 
     for (uint32_t layerIndex = 0; layerIndex < layerCount; ++layerIndex)
     {
@@ -2122,8 +2217,6 @@ angle::Result TextureVk::initRenderTargets(ContextVk *contextVk,
         vk::ImageHelper *resolveImage          = nullptr;
         vk::ImageViewHelper *resolveImageViews = nullptr;
 
-        const bool isMultisampledRenderToTexture =
-            renderToTextureIndex != gl::RenderToTextureImageIndex::Default;
         RenderTargetTransience transience = isMultisampledRenderToTexture
                                                 ? RenderTargetTransience::MultisampledTransient
                                                 : RenderTargetTransience::Default;
@@ -2150,8 +2243,18 @@ angle::Result TextureVk::initRenderTargets(ContextVk *contextVk,
 
         renderTargets[layerIndex].init(drawImage, drawImageViews, resolveImage, resolveImageViews,
                                        getNativeImageLevel(levelIndex),
-                                       getNativeImageLayer(layerIndex), transience);
+                                       getNativeImageLayer(layerIndex), 1, transience);
     }
+
+    // Create the layered render target.  Note that multisampled render to texture is not allowed
+    // with layered render targets.
+    if (!isMultisampledRenderToTexture)
+    {
+        renderTargets[layerCount].init(mImage, &getImageViews(), nullptr, nullptr,
+                                       getNativeImageLevel(levelIndex), getNativeImageLayer(0),
+                                       layerCount, RenderTargetTransience::Default);
+    }
+
     return angle::Result::Continue;
 }
 
@@ -2209,6 +2312,22 @@ angle::Result TextureVk::syncState(const gl::Context *context,
 {
     ContextVk *contextVk = vk::GetImpl(context);
     RendererVk *renderer = contextVk->getRenderer();
+
+    // If this is a texture buffer, release buffer views.  There's nothing else to sync.  The
+    // image must already be deleted, and the sampler reset.
+    if (mState.getBuffer().get() != nullptr)
+    {
+        ASSERT(mImage == nullptr);
+
+        const gl::OffsetBindingPointer<gl::Buffer> &bufferBinding = mState.getBuffer();
+
+        const VkDeviceSize offset = bufferBinding.getOffset();
+        const VkDeviceSize size   = gl::GetBoundBufferAvailableSize(bufferBinding);
+
+        mBufferViews.release(renderer);
+        mBufferViews.init(renderer, offset, size);
+        return angle::Result::Continue;
+    }
 
     VkImageUsageFlags oldUsageFlags   = mImageUsageFlags;
     VkImageCreateFlags oldCreateFlags = mImageCreateFlags;
@@ -2353,7 +2472,7 @@ void TextureVk::releaseOwnershipOfImage(const gl::Context *context)
     ContextVk *contextVk = vk::GetImpl(context);
 
     mOwnsImage = false;
-    releaseAndDeleteImage(contextVk);
+    releaseAndDeleteImageAndViews(contextVk);
 }
 
 bool TextureVk::shouldDecodeSRGB(ContextVk *contextVk,
@@ -2365,7 +2484,7 @@ bool TextureVk::shouldDecodeSRGB(ContextVk *contextVk,
     bool decodeSRGB          = format.actualImageFormat().isSRGB;
 
     // If the SRGB override is enabled, we also decode SRGB.
-    if (isSRGBOverrideEnabled() && vk::IsOverridableLinearFormat(format.vkImageFormat))
+    if (isSRGBOverrideEnabled() && IsOverridableLinearFormat(format.actualImageFormatID))
     {
         decodeSRGB = true;
     }
@@ -2439,7 +2558,7 @@ const vk::ImageView &TextureVk::getCopyImageViewAndRecordUse(ContextVk *contextV
     imageViews.retain(&contextVk->getResourceUseList());
 
     ASSERT(mImage->getFormat().actualImageFormat().isSRGB ==
-           (vk::ConvertToLinear(mImage->getFormat().vkImageFormat) != VK_FORMAT_UNDEFINED));
+           (ConvertToLinear(mImage->getFormat().actualImageFormatID) != angle::FormatID::NONE));
     if (mImage->getFormat().actualImageFormat().isSRGB)
     {
         return imageViews.getSRGBCopyImageView();
@@ -2469,21 +2588,48 @@ angle::Result TextureVk::getStorageImageView(ContextVk *contextVk,
     angle::FormatID formatID = angle::Format::InternalFormatToID(binding.format);
     const vk::Format &format = contextVk->getRenderer()->getFormat(formatID);
 
-    if (binding.layered != GL_TRUE)
-    {
-        return getLevelLayerImageView(contextVk, gl::LevelIndex(binding.level), binding.layer,
-                                      imageViewOut);
-    }
-
     gl::LevelIndex nativeLevelGL =
         getNativeImageLevel(gl::LevelIndex(static_cast<uint32_t>(binding.level)));
     vk::LevelIndex nativeLevelVk = mImage->toVkLevel(nativeLevelGL);
-    uint32_t nativeLayer         = getNativeImageLayer(0);
 
-    return getImageViews().getLevelDrawImageView(
+    if (binding.layered != GL_TRUE)
+    {
+        uint32_t nativeLayer = getNativeImageLayer(static_cast<uint32_t>(binding.layer));
+
+        return getImageViews().getLevelLayerStorageImageView(
+            contextVk, *mImage, nativeLevelVk, nativeLayer,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, format.actualImageFormatID,
+            imageViewOut);
+    }
+
+    uint32_t nativeLayer = getNativeImageLayer(0);
+
+    return getImageViews().getLevelStorageImageView(
         contextVk, mState.getType(), *mImage, nativeLevelVk, nativeLayer,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, format.vkImageFormat,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, format.actualImageFormatID,
         imageViewOut);
+}
+
+angle::Result TextureVk::getBufferViewAndRecordUse(ContextVk *contextVk,
+                                                   const vk::Format *imageUniformFormat,
+                                                   const vk::BufferView **viewOut)
+{
+    RendererVk *renderer = contextVk->getRenderer();
+
+    ASSERT(mState.getBuffer().get() != nullptr);
+
+    // Use the format specified by glTexBuffer if no format specified by the shader.
+    if (imageUniformFormat == nullptr)
+    {
+        const gl::ImageDesc &baseLevelDesc = mState.getBaseLevelDesc();
+        imageUniformFormat = &renderer->getFormat(baseLevelDesc.format.info->sizedInternalFormat);
+    }
+
+    // Create a view for the required format.
+    const vk::BufferHelper &buffer = vk::GetImpl(mState.getBuffer().get())->getBuffer();
+
+    retainBufferViews(&contextVk->getResourceUseList());
+    return mBufferViews.getView(contextVk, buffer, *imageUniformFormat, viewOut);
 }
 
 angle::Result TextureVk::initImage(ContextVk *contextVk,
@@ -2502,12 +2648,15 @@ angle::Result TextureVk::initImage(ContextVk *contextVk,
     // With the introduction of sRGB related GLES extensions any texture could be respecified
     // causing it to be interpreted in a different colorspace. Create the VkImage accordingly.
     VkImageFormatListCreateInfoKHR *additionalCreateInfo = nullptr;
-    VkFormat imageFormat                                 = format.vkImageFormat;
-    VkFormat imageListFormat = format.actualImageFormat().isSRGB ? vk::ConvertToLinear(imageFormat)
-                                                                 : vk::ConvertToSRGB(imageFormat);
+    angle::FormatID imageFormat                          = format.actualImageFormatID;
+    angle::FormatID imageListFormat                      = format.actualImageFormat().isSRGB
+                                          ? ConvertToLinear(imageFormat)
+                                          : ConvertToSRGB(imageFormat);
+    VkFormat vkFormat = vk::GetVkFormatFromFormatID(imageListFormat);
 
     VkImageFormatListCreateInfoKHR formatListInfo = {};
-    if (renderer->getFeatures().supportsImageFormatList.enabled)
+    if (renderer->getFeatures().supportsImageFormatList.enabled &&
+        renderer->haveSameFormatFeatureBits(format.actualImageFormatID, imageListFormat))
     {
         mRequiresMutableStorage = true;
 
@@ -2518,7 +2667,7 @@ angle::Result TextureVk::initImage(ContextVk *contextVk,
         formatListInfo.sType           = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO_KHR;
         formatListInfo.pNext           = nullptr;
         formatListInfo.viewFormatCount = 1;
-        formatListInfo.pViewFormats    = &imageListFormat;
+        formatListInfo.pViewFormats    = &vkFormat;
         additionalCreateInfo           = &formatListInfo;
     }
 
@@ -2768,7 +2917,7 @@ void TextureVk::onSubjectStateChange(angle::SubjectIndex index, angle::SubjectMe
     onStateChange(angle::SubjectMessage::SubjectChanged);
 }
 
-vk::ImageViewSubresourceSerial TextureVk::getImageViewSubresourceSerial(
+vk::ImageOrBufferViewSubresourceSerial TextureVk::getImageViewSubresourceSerial(
     const gl::SamplerState &samplerState) const
 {
     gl::LevelIndex baseLevel(mState.getEffectiveBaseLevel());
@@ -2785,6 +2934,11 @@ vk::ImageViewSubresourceSerial TextureVk::getImageViewSubresourceSerial(
 
     return getImageViews().getSubresourceSerial(baseLevel, levelCount, 0, vk::LayerMode::All,
                                                 srgbDecodeMode, srgbOverrideMode);
+}
+
+vk::ImageOrBufferViewSubresourceSerial TextureVk::getBufferViewSerial() const
+{
+    return mBufferViews.getSerial();
 }
 
 angle::Result TextureVk::refreshImageViews(ContextVk *contextVk)

@@ -76,8 +76,6 @@ class DisplayEGL : public DisplayGL
 
     bool isValidNativeWindow(EGLNativeWindowType window) const override;
 
-    DeviceImpl *createDevice() override;
-
     egl::Error waitClient(const gl::Context *context) override;
     egl::Error waitNative(const gl::Context *context, EGLint engine) override;
 
@@ -135,7 +133,7 @@ class DisplayEGL : public DisplayGL
         EGLSurface surface = EGL_NO_SURFACE;
         EGLContext context = EGL_NO_CONTEXT;
     };
-    std::unordered_map<std::thread::id, CurrentNativeContext> mCurrentNativeContexts;
+    angle::HashMap<std::thread::id, CurrentNativeContext> mCurrentNativeContexts;
 
   private:
     void generateCaps(egl::Caps *outCaps) const override;

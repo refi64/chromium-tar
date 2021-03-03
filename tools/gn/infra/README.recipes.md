@@ -27,7 +27,7 @@ Available only to Google-run bots.
 
 API for using OS X SDK distributed via CIPD.
 
-&emsp; **@contextmanager**<br>&mdash; **def [\_\_call\_\_](/infra/recipe_modules/macos_sdk/api.py#24)(self):**
+&emsp; **@contextmanager**<br>&mdash; **def [\_\_call\_\_](/infra/recipe_modules/macos_sdk/api.py#30)(self):**
 
 Sets up the XCode SDK environment.
 
@@ -60,6 +60,8 @@ Usage:
 
 Raises:
     StepFailure or InfraFailure.
+
+&emsp; **@property**<br>&mdash; **def [sdk\_dir](/infra/recipe_modules/macos_sdk/api.py#25)(self):**
 ### *recipe_modules* / [target](/infra/recipe_modules/target)
 
 [DEPS](/infra/recipe_modules/target/__init__.py#5): [recipe\_engine/platform][recipe_engine/recipe_modules/platform]
@@ -91,7 +93,7 @@ Raises:
 
 Recipe for building GN.
 
-&mdash; **def [RunSteps](/infra/recipes/gn.py#30)(api, repository):**
+&mdash; **def [RunSteps](/infra/recipes/gn.py#102)(api, repository):**
 ### *recipes* / [macos\_sdk:examples/full](/infra/recipe_modules/macos_sdk/examples/full.py)
 
 [DEPS](/infra/recipe_modules/macos_sdk/examples/full.py#5): [macos\_sdk](#recipe_modules-macos_sdk), [recipe\_engine/platform][recipe_engine/recipe_modules/platform], [recipe\_engine/properties][recipe_engine/recipe_modules/properties], [recipe\_engine/step][recipe_engine/recipe_modules/step]

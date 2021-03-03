@@ -28,9 +28,8 @@
 // Blend equations:
 3586 VULKAN : KHR-GLES31.core.blend_equation_advanced.* = SKIP
 
-// Limits:
-// GL_MIN/MAX_PROGRAM_TEXTURE_GATHER_OFFSET not set.
-3605 VULKAN : KHR-GLES31.core.texture_gather.* = FAIL
+// No known implementation supports STORAGE_TEXEL_BUFFER support for RGB32 formats
+3573 VULKAN : KHR-GLES31.core.texture_buffer.texture_buffer_texture_buffer_range = SKIP
 
 // Dispatch indirect:
 3726 VULKAN PIXEL2ORXL : KHR-GLES31.core.compute_shader.pipeline-compute-chain = FAIL
@@ -59,6 +58,12 @@
 4723 VULKAN NVIDIA : KHR-GLES31.core.shader_image_size.advanced-nonMS-vs-int = SKIP
 4723 VULKAN NVIDIA : KHR-GLES31.core.shader_image_size.advanced-nonMS-vs-uint = SKIP
 4723 VULKAN NVIDIA : KHR-GLES31.core.program_interface_query.transform-feedback-types = SKIP
+
+// Incompatible between incomplete texture and sampler format (isampler2D or usampler2D):
+3588 VULKAN : KHR-GLES31.core.sample_variables.mask.rgba8*i.* = FAIL
+
+// Geometry shader support
+5483 VULKAN : KHR-GLES31.core.draw_indirect.basic-mode-*adjacency = SKIP
 
 ////
 //// Desktop Vulkan expectations
@@ -94,6 +99,9 @@
 // Fails on Pixel2 and Pixel2 XL
 4159 VULKAN PIXEL2ORXL : KHR-GLES31.core.draw_indirect.advanced-twoPass-transformFeedback-elements = FAIL
 4159 VULKAN PIXEL2ORXL : KHR-GLES31.core.draw_indirect.advanced-twoPass-transformFeedback-arrays = FAIL
+
+// Fails to link the shader program on Pixel2 and Pixel2 XL
+3588 VULKAN PIXEL2ORXL : KHR-GLES31.core.sample_variables.mask.rgba8.samples_*.mask_* = FAIL
 
 // Android uses "old" sampler rewrite that doesn't support array of arrays
 2703 VULKAN ANDROID : KHR-GLES31.core.arrays_of_arrays.* = SKIP

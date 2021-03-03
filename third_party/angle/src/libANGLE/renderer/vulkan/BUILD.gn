@@ -84,6 +84,8 @@ _vulkan_backend_sources = [
   "UtilsVk.h",
   "VertexArrayVk.cpp",
   "VertexArrayVk.h",
+  "android/vk_android_utils.cpp",
+  "android/vk_android_utils.h",
   "vk_cache_utils.cpp",
   "vk_cache_utils.h",
   "vk_caps_utils.cpp",
@@ -107,6 +109,10 @@ if (is_linux) {
     "display/DisplayVkSimple.h",
     "display/WindowSurfaceVkSimple.cpp",
     "display/WindowSurfaceVkSimple.h",
+    "headless/DisplayVkHeadless.cpp",
+    "headless/DisplayVkHeadless.h",
+    "headless/WindowSurfaceVkHeadless.cpp",
+    "headless/WindowSurfaceVkHeadless.h",
   ]
 }
 

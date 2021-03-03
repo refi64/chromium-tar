@@ -587,6 +587,7 @@ void SerializeShaderVariable(gl::BinaryOutputStream *bos, const sh::ShaderVariab
         SerializeShaderVariable(bos, field);
     }
     bos->writeString(shaderVariable.structName);
+    bos->writeString(shaderVariable.mappedStructName);
     bos->writeBool(shaderVariable.isRowMajorLayout);
     bos->writeInt(shaderVariable.location);
     bos->writeInt(shaderVariable.binding);
@@ -595,6 +596,7 @@ void SerializeShaderVariable(gl::BinaryOutputStream *bos, const sh::ShaderVariab
     bos->writeBool(shaderVariable.readonly);
     bos->writeBool(shaderVariable.writeonly);
     bos->writeInt(shaderVariable.index);
+    bos->writeBool(shaderVariable.yuv);
     bos->writeEnum(shaderVariable.interpolation);
     bos->writeBool(shaderVariable.isInvariant);
     bos->writeBool(shaderVariable.texelFetchStaticUse);
@@ -645,6 +647,7 @@ void SerializeShaderState(gl::BinaryOutputStream *bos, const gl::ShaderState &sh
     SerializeShaderVariablesVector(bos, shaderState.getActiveOutputVariables());
     bos->writeBool(shaderState.getEarlyFragmentTestsOptimization());
     bos->writeInt(shaderState.getNumViews());
+    bos->writeInt(shaderState.getSpecConstUsageBits().bits());
     if (shaderState.getGeometryShaderInputPrimitiveType().valid())
     {
         bos->writeEnum(shaderState.getGeometryShaderInputPrimitiveType().value());
@@ -763,10 +766,6 @@ void SerializeProgramState(gl::BinaryOutputStream *bos, const gl::ProgramState &
     bos->writeBool(programState.isSeparable());
     bos->writeBool(programState.hasEarlyFragmentTestsOptimization());
     bos->writeInt(programState.getNumViews());
-    bos->writeEnum(programState.getGeometryShaderInputPrimitiveType());
-    bos->writeEnum(programState.getGeometryShaderOutputPrimitiveType());
-    bos->writeInt(programState.getGeometryShaderInvocations());
-    bos->writeInt(programState.getGeometryShaderMaxVertices());
     bos->writeInt(programState.getDrawIDLocation());
     bos->writeInt(programState.getBaseVertexLocation());
     bos->writeInt(programState.getBaseInstanceLocation());

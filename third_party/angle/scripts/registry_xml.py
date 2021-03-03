@@ -66,6 +66,8 @@ gles_extensions = [
     "GL_EXT_blend_func_extended",
     "GL_EXT_buffer_storage",
     "GL_EXT_copy_image",
+    "GL_EXT_clip_control",
+    "GL_EXT_debug_label",
     "GL_EXT_debug_marker",
     "GL_EXT_discard_framebuffer",
     "GL_EXT_disjoint_timer_query",
@@ -86,7 +88,11 @@ gles_extensions = [
     "GL_EXT_robustness",
     "GL_EXT_semaphore",
     "GL_EXT_semaphore_fd",
+    "GL_EXT_separate_shader_objects",
+    "GL_EXT_shader_framebuffer_fetch_non_coherent",
+    "GL_EXT_shader_io_blocks",
     "GL_EXT_sRGB",
+    "GL_EXT_tessellation_shader",
     "GL_EXT_texture_buffer",
     "GL_EXT_texture_compression_bptc",
     "GL_EXT_texture_compression_dxt1",
@@ -98,9 +104,11 @@ gles_extensions = [
     "GL_EXT_texture_format_BGRA8888",
     "GL_EXT_texture_storage",
     "GL_EXT_texture_sRGB_R8",
+    "GL_EXT_YUV_target",
     "GL_KHR_debug",
     "GL_KHR_parallel_shader_compile",
     "GL_NV_fence",
+    "GL_NV_framebuffer_blit",
     "GL_OES_compressed_ETC1_RGB8_texture",
     "GL_EXT_compressed_ETC1_RGB8_sub_texture",
     "GL_OES_copy_image",
@@ -111,6 +119,7 @@ gles_extensions = [
     "GL_OES_get_program_binary",
     "GL_OES_mapbuffer",
     "GL_OES_sample_shading",
+    "GL_OES_shader_io_blocks",
     "GL_OES_texture_3D",
     "GL_OES_texture_border_clamp",
     "GL_OES_texture_buffer",
@@ -201,6 +210,14 @@ unsupported_enum_group_names = {
     'ClampColorTargetARB',
     'ClampColorModeARB',
 }
+
+# Versions (major, minor). Note that GLES intentionally places 1.0 last.
+DESKTOP_GL_VERSIONS = [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5), (2, 0), (2, 1), (3, 0),
+                       (3, 1), (3, 2), (3, 3), (4, 0), (4, 1), (4, 2), (4, 3), (4, 4), (4, 5),
+                       (4, 6)]
+GLES_VERSIONS = [(2, 0), (3, 0), (3, 1), (3, 2), (1, 0)]
+EGL_VERSIONS = [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4), (1, 5)]
+WGL_VERSIONS = [(1, 0)]
 
 
 def script_relative(path):

@@ -387,6 +387,8 @@ TEST_P(StateChangeTestES3, DrawPausedXfbThenNonXfbLines)
     // glTransformFeedbackVaryings for program2 returns GL_INVALID_OPERATION on both Linux and
     // windows.  http://anglebug.com/4265
     ANGLE_SKIP_TEST_IF(IsIntel() && IsOpenGL());
+    // http://anglebug.com/5388
+    ANGLE_SKIP_TEST_IF(IsLinux() && IsAMD() && IsDesktopOpenGL());
 
     std::vector<std::string> tfVaryings = {"gl_Position"};
     ANGLE_GL_PROGRAM_TRANSFORM_FEEDBACK(program1, essl1_shaders::vs::Simple(),
@@ -792,9 +794,6 @@ TEST_P(StateChangeRenderTest, GenerateMipmap)
 // Tests that gl_DepthRange syncs correctly after a change.
 TEST_P(StateChangeRenderTest, DepthRangeUpdates)
 {
-    // http://anglebug.com/2598: Seems to be an Intel driver bug.
-    ANGLE_SKIP_TEST_IF(IsIntel() && IsOpenGL() && IsWindows());
-
     constexpr char kFragCoordShader[] = R"(void main()
 {
     if (gl_DepthRange.near == 0.2)
@@ -891,11 +890,6 @@ TEST_P(StateChangeRenderTestES3, InvalidateNonCurrentFramebuffer)
 // Tests that D3D11 dirty bit updates don't forget about BufferSubData attrib updates.
 TEST_P(StateChangeTest, VertexBufferUpdatedAfterDraw)
 {
-    // TODO(jie.a.chen@intel.com): Re-enable the test once the driver fix is
-    // available in public release.
-    // http://anglebug.com/2664.
-    ANGLE_SKIP_TEST_IF(IsVulkan() && IsIntel());
-
     constexpr char kVS[] =
         "attribute vec2 position;\n"
         "attribute vec4 color;\n"
@@ -1097,6 +1091,9 @@ TEST_P(StateChangeTestES3, SamplerMetadataUpdateOnSetProgram)
 {
     // http://anglebug.com/4092
     ANGLE_SKIP_TEST_IF(IsAndroid() && IsOpenGLES());
+    // TODO(anglebug.com/5491) Appears as though there's something wrong with textureSize on iOS
+    // unrelated to switching programs.
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
     GLVertexArray vertexArray;
     glBindVertexArray(vertexArray);
 
@@ -1802,10 +1799,10 @@ TEST_P(SimpleStateChangeTest, DrawElementsThenDrawElementsNewIndices)
 
     // We expect to draw the triangle with the last three points on the bottom right, and
     // rebind the same element buffer and draw with the same indices.
-    auto vertices = std::vector<Vector3>{
+    std::vector<Vector3> vertices = {
         {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f}};
 
-    auto indices8 = std::vector<GLubyte>{0, 1, 2, 2, 3, 0};
+    std::vector<GLubyte> indices8 = {0, 1, 2, 2, 3, 0};
 
     GLint positionLocation = glGetAttribLocation(program, essl1_shaders::PositionAttrib());
     ASSERT_NE(-1, positionLocation);
@@ -1831,7 +1828,77 @@ TEST_P(SimpleStateChangeTest, DrawElementsThenDrawElementsNewIndices)
 
     glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_BYTE, (void *)(0 * sizeof(GLubyte)));
 
-    auto newIndices8 = std::vector<GLubyte>{2, 3, 0};
+    std::vector<GLubyte> newIndices8 = {2, 3, 0};
+
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, newIndices8.size() * sizeof(GLubyte),
+                    &newIndices8[0]);
+
+    glUniform4f(colorUniformLocation, 0.0f, 0.0f, 1.0f, 1.0f);
+
+    // Draw the triangle again with the same offset.
+    glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_BYTE, (void *)(0 * sizeof(GLubyte)));
+
+    glDisableVertexAttribArray(positionLocation);
+
+    ASSERT_GL_NO_ERROR();
+
+    int quarterWidth  = getWindowWidth() / 4;
+    int quarterHeight = getWindowHeight() / 4;
+
+    // Validate the triangle is drawn on the bottom left.
+    EXPECT_PIXEL_COLOR_EQ(quarterWidth * 2, quarterHeight, GLColor::blue);
+    EXPECT_PIXEL_COLOR_EQ(quarterWidth, quarterHeight * 2, GLColor::blue);
+
+    // Validate the triangle is NOT on the top right part.
+    EXPECT_PIXEL_COLOR_EQ(quarterWidth * 2, quarterHeight * 3, GLColor::white);
+}
+
+// Draw a triangle with drawElements then change the indices and draw again.  Similar to
+// DrawElementsThenDrawElementsNewIndices, but changes the whole index buffer (not just half).  This
+// triggers a different path in the Vulkan backend based on the fact that the majority of the buffer
+// is being updated.
+TEST_P(SimpleStateChangeTest, DrawElementsThenDrawElementsWholeNewIndices)
+{
+    ANGLE_GL_PROGRAM(program, essl1_shaders::vs::Simple(), essl1_shaders::fs::UniformColor());
+
+    glUseProgram(program);
+
+    // Background Red color
+    glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // We expect to draw the triangle with the last three points on the bottom right, and
+    // rebind the same element buffer and draw with the same indices.
+    std::vector<Vector3> vertices = {
+        {-1.0f, 1.0f, 0.0f}, {1.0f, 1.0f, 0.0f}, {1.0f, -1.0f, 0.0f}, {-1.0f, -1.0f, 0.0f}};
+
+    std::vector<GLubyte> indices8 = {0, 1, 2, 2, 3, 0};
+
+    GLint positionLocation = glGetAttribLocation(program, essl1_shaders::PositionAttrib());
+    ASSERT_NE(-1, positionLocation);
+
+    GLint colorUniformLocation =
+        glGetUniformLocation(program, angle::essl1_shaders::ColorUniform());
+    ASSERT_NE(colorUniformLocation, -1);
+
+    glUniform4f(colorUniformLocation, 1.0f, 1.0f, 1.0f, 1.0f);
+
+    GLBuffer indexBuffer8;
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBuffer8);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices8.size() * sizeof(GLubyte), &indices8[0],
+                 GL_DYNAMIC_DRAW);
+
+    GLBuffer vertexBuffer;
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBuffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices[0]) * vertices.size(), vertices.data(),
+                 GL_STATIC_DRAW);
+
+    glVertexAttribPointer(positionLocation, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(positionLocation);
+
+    glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_BYTE, (void *)(0 * sizeof(GLubyte)));
+
+    std::vector<GLubyte> newIndices8 = {2, 3, 0, 0, 0, 0};
 
     glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, newIndices8.size() * sizeof(GLubyte),
                     &newIndices8[0]);
@@ -2751,6 +2818,8 @@ TEST_P(SimpleStateChangeTestES31, InvalidateThenStorageWriteThenBlend)
 {
     // Fails on AMD OpenGL Windows. This configuration isn't maintained.
     ANGLE_SKIP_TEST_IF(IsWindows() && IsAMD() && IsOpenGL());
+    // http://anglebug.com/5387
+    ANGLE_SKIP_TEST_IF(IsLinux() && IsAMD() && IsDesktopOpenGL());
 
     constexpr char kCS[] = R"(#version 310 es
 layout(local_size_x=1, local_size_y=1) in;
@@ -4171,7 +4240,7 @@ class RobustBufferAccessWebGL2ValidationStateChangeTest : public WebGL2Validatio
     RobustBufferAccessWebGL2ValidationStateChangeTest()
     {
         // SwS/OSX GL do not support robustness. Mali does not support it.
-        if (!isSwiftshader() && !IsOSX() && !IsARM())
+        if (!isSwiftshader() && !IsOSX() && !IsIOS() && !IsARM())
         {
             setRobustAccess(true);
         }
@@ -4243,6 +4312,146 @@ TEST_P(ValidationStateChangeTest, MapBufferAndDraw)
     glUnmapBuffer(GL_ARRAY_BUFFER);
     ASSERT_GL_NO_ERROR();
 
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ASSERT_GL_NO_ERROR();
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::blue);
+}
+
+// Tests that mapping an immutable and persistent buffer after calling glVertexAttribPointer()
+// allows rendering to succeed.
+TEST_P(ValidationStateChangeTest, MapImmutablePersistentBufferAndDraw)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_buffer_storage"));
+
+    // Initialize program and set up state.
+    ANGLE_GL_PROGRAM(program, kColorVS, kColorFS);
+
+    glUseProgram(program);
+    GLint positionLoc = glGetAttribLocation(program, "position");
+    ASSERT_NE(-1, positionLoc);
+    GLint colorLoc = glGetAttribLocation(program, "color");
+    ASSERT_NE(-1, colorLoc);
+
+    const std::array<Vector3, 6> &quadVertices = GetQuadVertices();
+    const size_t posBufferSize                 = quadVertices.size() * sizeof(Vector3);
+
+    GLBuffer posBuffer;
+    glBindBuffer(GL_ARRAY_BUFFER, posBuffer);
+    glBufferStorageEXT(GL_ARRAY_BUFFER, posBufferSize, quadVertices.data(),
+                       GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+
+    // Start with position enabled.
+    glVertexAttribPointer(positionLoc, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(positionLoc);
+
+    std::vector<GLColor> colorVertices(6, GLColor::blue);
+    const size_t colorBufferSize = sizeof(GLColor) * 6;
+
+    GLBuffer colorBuffer;
+    glBindBuffer(GL_ARRAY_BUFFER, colorBuffer);
+    glBufferStorageEXT(GL_ARRAY_BUFFER, colorBufferSize, colorVertices.data(),
+                       GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+
+    // Start with color disabled.
+    glVertexAttribPointer(colorLoc, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, nullptr);
+    glDisableVertexAttribArray(colorLoc);
+
+    ASSERT_GL_NO_ERROR();
+
+    // Draw without a mapped buffer. Should succeed.
+    glVertexAttrib4f(colorLoc, 0, 1, 0, 1);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ASSERT_GL_NO_ERROR();
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::green);
+
+    // Map position buffer and draw. Should succeed.
+    glBindBuffer(GL_ARRAY_BUFFER, posBuffer);
+    glMapBufferRange(GL_ARRAY_BUFFER, 0, posBufferSize,
+                     GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+    ASSERT_GL_NO_ERROR();
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ASSERT_GL_NO_ERROR();
+    glUnmapBuffer(GL_ARRAY_BUFFER);
+
+    // Map then enable color buffer. Should succeed.
+    glBindBuffer(GL_ARRAY_BUFFER, colorBuffer);
+    glMapBufferRange(GL_ARRAY_BUFFER, 0, colorBufferSize,
+                     GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+    glEnableVertexAttribArray(colorLoc);
+    ASSERT_GL_NO_ERROR();
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ASSERT_GL_NO_ERROR();
+
+    // Unmap then draw. Should succeed.
+    glUnmapBuffer(GL_ARRAY_BUFFER);
+    ASSERT_GL_NO_ERROR();
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ASSERT_GL_NO_ERROR();
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::blue);
+}
+
+// Tests that mapping an immutable and persistent buffer before calling glVertexAttribPointer()
+// allows rendering to succeed. This case is special in that the VertexArray is not observing the
+// buffer yet, so it's various cached buffer states aren't updated when the buffer is mapped.
+TEST_P(ValidationStateChangeTest, MapImmutablePersistentBufferThenVAPAndDraw)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_buffer_storage"));
+
+    // Initialize program and set up state.
+    ANGLE_GL_PROGRAM(program, kColorVS, kColorFS);
+
+    glUseProgram(program);
+    GLint positionLoc = glGetAttribLocation(program, "position");
+    ASSERT_NE(-1, positionLoc);
+    GLint colorLoc = glGetAttribLocation(program, "color");
+    ASSERT_NE(-1, colorLoc);
+
+    const std::array<Vector3, 6> &quadVertices = GetQuadVertices();
+    const size_t posBufferSize                 = quadVertices.size() * sizeof(Vector3);
+
+    GLBuffer posBuffer;
+    glBindBuffer(GL_ARRAY_BUFFER, posBuffer);
+    glBufferStorageEXT(GL_ARRAY_BUFFER, posBufferSize, quadVertices.data(),
+                       GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+
+    glMapBufferRange(GL_ARRAY_BUFFER, 0, posBufferSize,
+                     GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+
+    // Start with position enabled.
+    glVertexAttribPointer(positionLoc, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(positionLoc);
+
+    std::vector<GLColor> colorVertices(6, GLColor::blue);
+    const size_t colorBufferSize = sizeof(GLColor) * 6;
+
+    GLBuffer colorBuffer;
+    glBindBuffer(GL_ARRAY_BUFFER, colorBuffer);
+    glBufferStorageEXT(GL_ARRAY_BUFFER, colorBufferSize, colorVertices.data(),
+                       GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+
+    glMapBufferRange(GL_ARRAY_BUFFER, 0, colorBufferSize,
+                     GL_MAP_READ_BIT | GL_MAP_PERSISTENT_BIT_EXT);
+    ASSERT_GL_NO_ERROR();
+
+    // Start with color disabled.
+    glVertexAttribPointer(colorLoc, 4, GL_UNSIGNED_BYTE, GL_TRUE, 0, nullptr);
+    glDisableVertexAttribArray(colorLoc);
+
+    ASSERT_GL_NO_ERROR();
+
+    // Draw without a mapped buffer. Should succeed.
+    glVertexAttrib4f(colorLoc, 0, 1, 0, 1);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    ASSERT_GL_NO_ERROR();
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::green);
+
+    // Unmap then draw. Should succeed.
+    glUnmapBuffer(GL_ARRAY_BUFFER);
+    glEnableVertexAttribArray(colorLoc);
+    ASSERT_GL_NO_ERROR();
     glDrawArrays(GL_TRIANGLES, 0, 6);
     ASSERT_GL_NO_ERROR();
     EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::blue);
@@ -5273,6 +5482,9 @@ TEST_P(SimpleStateChangeTest, FboLateCullFaceBackCWState)
 // binding back to the previous buffer.
 TEST_P(SimpleStateChangeTest, RebindTranslatedAttribute)
 {
+    // http://anglebug.com/5379
+    ANGLE_SKIP_TEST_IF(IsLinux() && IsAMD() && IsVulkan());
+
     constexpr char kVS[] = R"(attribute vec4 a_position;
 attribute float a_attrib;
 varying float v_attrib;
@@ -5777,6 +5989,9 @@ TEST_P(RobustBufferAccessWebGL2ValidationStateChangeTest, BindZeroSizeBufferThen
 
     // Mali does not support robustness now.
     ANGLE_SKIP_TEST_IF(IsARM());
+
+    // TODO(anglebug.com/5491)
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
 
     std::vector<GLubyte> data(48, 1);
 

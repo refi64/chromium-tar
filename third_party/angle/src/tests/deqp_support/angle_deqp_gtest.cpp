@@ -23,6 +23,7 @@
 #include "platform/PlatformMethods.h"
 #include "tests/test_expectations/GPUTestConfig.h"
 #include "tests/test_expectations/GPUTestExpectationsParser.h"
+#include "util/OSWindow.h"
 #include "util/test_utils.h"
 
 namespace angle
@@ -32,6 +33,7 @@ namespace
 bool gGlobalError = false;
 bool gExpectError = false;
 uint32_t gBatchId = 0;
+bool gVerbose     = false;
 
 constexpr char kInfoTag[] = "*RESULT";
 
@@ -54,20 +56,11 @@ std::string DrawElementsToGoogleTestName(const std::string &dEQPName)
     return gTestName;
 }
 
-const char *gCaseListSearchPaths[] = {
-    "/../../sdcard/chromium_tests_root/third_party/angle/third_party/VK-GL-CTS/src",
-    "/../../third_party/VK-GL-CTS/src",
-    "/../../third_party/angle/third_party/VK-GL-CTS/src",
-};
+// Relative to the ANGLE root folder.
+constexpr char kCTSRootPath[] = "third_party/VK-GL-CTS/src/";
+constexpr char kSupportPath[] = "src/tests/deqp_support/";
 
-const char *gTestExpectationsSearchPaths[] = {
-    "/../../src/tests/deqp_support/",
-    "/../../third_party/angle/src/tests/deqp_support/",
-    "/deqp_support/",
-    "/../../sdcard/chromium_tests_root/third_party/angle/src/tests/deqp_support/",
-};
-
-#define OPENGL_CTS_DIR(PATH) "/external/openglcts/data/mustpass/gles/" PATH
+#define OPENGL_CTS_DIR(PATH) "external/openglcts/data/mustpass/gles/" PATH
 
 const char *gCaseListFiles[] = {
     OPENGL_CTS_DIR("aosp_mustpass/master/gles2-master.txt"),
@@ -77,6 +70,7 @@ const char *gCaseListFiles[] = {
     OPENGL_CTS_DIR("khronos_mustpass/master/gles2-khr-master.txt"),
     OPENGL_CTS_DIR("khronos_mustpass/master/gles3-khr-master.txt"),
     OPENGL_CTS_DIR("khronos_mustpass/master/gles31-khr-master.txt"),
+    OPENGL_CTS_DIR("khronos_mustpass/master/gles32-khr-master.txt"),
     OPENGL_CTS_DIR("aosp_mustpass/master/gles3-rotate-landscape.txt"),
     OPENGL_CTS_DIR("aosp_mustpass/master/gles3-rotate-reverse-portrait.txt"),
     OPENGL_CTS_DIR("aosp_mustpass/master/gles3-rotate-reverse-landscape.txt"),
@@ -91,10 +85,10 @@ const char *gTestExpectationsFiles[] = {
     "deqp_gles2_test_expectations.txt",         "deqp_gles3_test_expectations.txt",
     "deqp_gles31_test_expectations.txt",        "deqp_egl_test_expectations.txt",
     "deqp_khr_gles2_test_expectations.txt",     "deqp_khr_gles3_test_expectations.txt",
-    "deqp_khr_gles31_test_expectations.txt",    "deqp_gles3_rotate_test_expectations.txt",
+    "deqp_khr_gles31_test_expectations.txt",    "deqp_khr_gles32_test_expectations.txt",
     "deqp_gles3_rotate_test_expectations.txt",  "deqp_gles3_rotate_test_expectations.txt",
+    "deqp_gles3_rotate_test_expectations.txt",  "deqp_gles31_rotate_test_expectations.txt",
     "deqp_gles31_rotate_test_expectations.txt", "deqp_gles31_rotate_test_expectations.txt",
-    "deqp_gles31_rotate_test_expectations.txt",
 };
 
 using APIInfo = std::pair<const char *, GPUTestConfig::API>;
@@ -115,11 +109,23 @@ constexpr char kANGLEEGLString[]   = "--use-angle=";
 constexpr char kANGLEPreRotation[] = "--emulated-pre-rotation=";
 constexpr char kdEQPCaseString[]   = "--deqp-case=";
 constexpr char kBatchIdString[]    = "--batch-id=";
+constexpr char kVerboseString[]    = "--verbose";
 
 std::array<char, 500> gCaseStringBuffer;
 
+// For angle_deqp_gles3*_rotateN_tests, default gPreRotation to N.
+#if defined(ANGLE_DEQP_GLES3_ROTATE90_TESTS) || defined(ANGLE_DEQP_GLES31_ROTATE90_TESTS)
+constexpr uint32_t kDefaultPreRotation = 90;
+#elif defined(ANGLE_DEQP_GLES3_ROTATE180_TESTS) || defined(ANGLE_DEQP_GLES31_ROTATE180_TESTS)
+constexpr uint32_t kDefaultPreRotation = 180;
+#elif defined(ANGLE_DEQP_GLES3_ROTATE270_TESTS) || defined(ANGLE_DEQP_GLES31_ROTATE270_TESTS)
+constexpr uint32_t kDefaultPreRotation = 270;
+#else
+constexpr uint32_t kDefaultPreRotation = 0;
+#endif
+
 const APIInfo *gInitAPI = nullptr;
-uint32_t gPreRotation   = 0;
+uint32_t gPreRotation   = kDefaultPreRotation;
 
 constexpr const char *gdEQPEGLConfigNameString = "--deqp-gl-config-name=";
 
@@ -129,12 +135,11 @@ const char *gEGLConfigName = "rgba8888d24s8";
 // Returns the default API for a platform.
 const char *GetDefaultAPIName()
 {
-#if defined(ANGLE_PLATFORM_WINDOWS)
-    return "angle-d3d11";
-#elif defined(ANGLE_PLATFORM_APPLE) || defined(ANGLE_PLATFORM_LINUX)
+#if defined(ANGLE_PLATFORM_ANDROID) || defined(ANGLE_PLATFORM_LINUX) || \
+    defined(ANGLE_PLATFORM_WINDOWS)
+    return "angle-vulkan";
+#elif defined(ANGLE_PLATFORM_APPLE)
     return "angle-gl";
-#elif defined(ANGLE_PLATFORM_ANDROID)
-    return "angle-gles";
 #else
 #    error Unknown platform.
 #endif
@@ -171,39 +176,30 @@ void Die()
     exit(EXIT_FAILURE);
 }
 
-Optional<std::string> FindFileFromPaths(const char *paths[],
-                                        size_t numPaths,
-                                        const std::string &exeDir,
-                                        const std::string &searchFile)
+Optional<std::string> FindFileFromPath(const char *dirPath, const char *filePath)
 {
-    for (size_t pathIndex = 0; pathIndex < numPaths; ++pathIndex)
-    {
-        const char *testPath = paths[pathIndex];
-        std::stringstream pathStringStream;
-        pathStringStream << exeDir << testPath << searchFile;
+    std::stringstream strstr;
+    strstr << dirPath << filePath;
+    std::string path = strstr.str();
 
-        std::string path = pathStringStream.str();
-        std::ifstream inFile(path.c_str());
-        if (!inFile.fail())
-        {
-            inFile.close();
-            return Optional<std::string>(path);
-        }
+    constexpr size_t kMaxFoundPathLen = 1000;
+    char foundPath[kMaxFoundPathLen];
+    if (angle::FindTestDataPath(path.c_str(), foundPath, kMaxFoundPathLen))
+    {
+        return std::string(foundPath);
     }
 
     return Optional<std::string>::Invalid();
 }
 
-Optional<std::string> FindCaseListPath(const std::string &exeDir, size_t testModuleIndex)
+Optional<std::string> FindCaseListPath(size_t testModuleIndex)
 {
-    return FindFileFromPaths(gCaseListSearchPaths, ArraySize(gCaseListSearchPaths), exeDir,
-                             gCaseListFiles[testModuleIndex]);
+    return FindFileFromPath(kCTSRootPath, gCaseListFiles[testModuleIndex]);
 }
 
-Optional<std::string> FindTestExpectationsPath(const std::string &exeDir, size_t testModuleIndex)
+Optional<std::string> FindTestExpectationsPath(size_t testModuleIndex)
 {
-    return FindFileFromPaths(gTestExpectationsSearchPaths, ArraySize(gTestExpectationsSearchPaths),
-                             exeDir, gTestExpectationsFiles[testModuleIndex]);
+    return FindFileFromPath(kSupportPath, gTestExpectationsFiles[testModuleIndex]);
 }
 
 class dEQPCaseList
@@ -255,16 +251,14 @@ void dEQPCaseList::initialize()
 
     mInitialized = true;
 
-    std::string exeDir = GetExecutableDirectory();
-
-    Optional<std::string> caseListPath = FindCaseListPath(exeDir, mTestModuleIndex);
+    Optional<std::string> caseListPath = FindCaseListPath(mTestModuleIndex);
     if (!caseListPath.valid())
     {
         std::cerr << "Failed to find case list file." << std::endl;
         Die();
     }
 
-    Optional<std::string> testExpectationsPath = FindTestExpectationsPath(exeDir, mTestModuleIndex);
+    Optional<std::string> testExpectationsPath = FindTestExpectationsPath(mTestModuleIndex);
     if (!testExpectationsPath.valid())
     {
         std::cerr << "Failed to find test expectations file." << std::endl;
@@ -607,28 +601,32 @@ ANGLE_INSTANTIATE_DEQP_TEST_CASE(KHR_GLES3, 5);
 ANGLE_INSTANTIATE_DEQP_TEST_CASE(KHR_GLES31, 6);
 #endif
 
+#ifdef ANGLE_DEQP_KHR_GLES32_TESTS
+ANGLE_INSTANTIATE_DEQP_TEST_CASE(KHR_GLES32, 7);
+#endif
+
 #ifdef ANGLE_DEQP_GLES3_ROTATE90_TESTS
-ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES3_ROTATE90, 7);
+ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES3_ROTATE90, 8);
 #endif
 
 #ifdef ANGLE_DEQP_GLES3_ROTATE180_TESTS
-ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES3_ROTATE180, 8);
+ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES3_ROTATE180, 9);
 #endif
 
 #ifdef ANGLE_DEQP_GLES3_ROTATE270_TESTS
-ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES3_ROTATE270, 9);
+ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES3_ROTATE270, 10);
 #endif
 
 #ifdef ANGLE_DEQP_GLES31_ROTATE90_TESTS
-ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES31_ROTATE90, 10);
+ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES31_ROTATE90, 11);
 #endif
 
 #ifdef ANGLE_DEQP_GLES31_ROTATE180_TESTS
-ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES31_ROTATE180, 11);
+ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES31_ROTATE180, 12);
 #endif
 
 #ifdef ANGLE_DEQP_GLES31_ROTATE270_TESTS
-ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES31_ROTATE270, 12);
+ANGLE_INSTANTIATE_DEQP_TEST_CASE(GLES31_ROTATE270, 13);
 #endif
 
 void HandleDisplayType(const char *displayTypeString)
@@ -736,6 +734,11 @@ void InitTestHarness(int *argc, char **argv)
         else if (strncmp(argv[argIndex], kBatchIdString, strlen(kBatchIdString)) == 0)
         {
             HandleBatchId(argv[argIndex] + strlen(kBatchIdString));
+        }
+        else if (strncmp(argv[argIndex], kVerboseString, strlen(kVerboseString)) == 0 ||
+                 strcmp(argv[argIndex], "-v") == 0)
+        {
+            gVerbose = true;
         }
         argIndex++;
     }

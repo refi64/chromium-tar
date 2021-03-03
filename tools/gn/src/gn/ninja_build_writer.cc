@@ -113,6 +113,15 @@ base::CommandLine GetSelfInvocationCommandLine(
     }
   }
 
+  // Add the regeneration switch if not already present. This is so that when
+  // the regeneration is invoked by ninja, the gen command is aware that it is a
+  // regeneration invocation and not an user invocation. This allows the gen
+  // command to elide ninja post processing steps that ninja will perform
+  // itself.
+  if (!cmdline.HasSwitch(switches::kRegeneration)) {
+    cmdline.AppendSwitch(switches::kRegeneration);
+  }
+
   return cmdline;
 }
 
@@ -281,6 +290,8 @@ void NinjaBuildWriter::WriteNinjaRules() {
        << build_settings_->ninja_required_version().Describe() << "\n\n";
   out_ << "rule gn\n";
   out_ << "  command = " << GetSelfInvocationCommand(build_settings_) << "\n";
+  // Putting gn rule to console pool for colorful output on regeneration
+  out_ << "  pool = console\n";
   out_ << "  description = Regenerating ninja files\n\n";
 
   // This rule will regenerate the ninja files when any input file has changed.

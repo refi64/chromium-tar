@@ -37,13 +37,17 @@ ShShaderSpec SelectShaderSpec(GLint majorVersion,
 
     if (majorVersion >= 3)
     {
-        if (minorVersion == 1)
+        switch (minorVersion)
         {
-            return isWebGL ? SH_WEBGL3_SPEC : SH_GLES3_1_SPEC;
-        }
-        else
-        {
-            return isWebGL ? SH_WEBGL2_SPEC : SH_GLES3_SPEC;
+            case 2:
+                ASSERT(!isWebGL);
+                return SH_GLES3_2_SPEC;
+            case 1:
+                return isWebGL ? SH_WEBGL3_SPEC : SH_GLES3_1_SPEC;
+            case 0:
+                return isWebGL ? SH_WEBGL2_SPEC : SH_GLES3_SPEC;
+            default:
+                UNREACHABLE();
         }
     }
 
@@ -103,6 +107,8 @@ Compiler::Compiler(rx::GLImplFactory *implFactory, const State &state, egl::Disp
     mResources.NV_shader_noperspective_interpolation = extensions.noperspectiveInterpolationNV;
     mResources.ARB_texture_rectangle                 = extensions.textureRectangle;
     mResources.EXT_gpu_shader5                       = extensions.gpuShader5EXT;
+    mResources.OES_shader_io_blocks                  = extensions.shaderIoBlocksOES;
+    mResources.EXT_shader_io_blocks                  = extensions.shaderIoBlocksEXT;
     mResources.OES_texture_storage_multisample_2d_array =
         extensions.textureStorageMultisample2DArrayOES;
     mResources.OES_texture_3D                  = extensions.texture3DOES;
@@ -142,6 +148,9 @@ Compiler::Compiler(rx::GLImplFactory *implFactory, const State &state, egl::Disp
     mResources.OES_texture_buffer = extensions.textureBufferOES;
     mResources.EXT_texture_buffer = extensions.textureBufferEXT;
 
+    // GL_EXT_YUV_target
+    mResources.EXT_YUV_target = extensions.yuvTargetEXT;
+
     // GLSL ES 3.0 constants
     mResources.MaxVertexOutputVectors  = caps.maxVertexOutputComponents / 4;
     mResources.MaxFragmentInputVectors = caps.maxFragmentInputComponents / 4;
@@ -154,6 +163,10 @@ Compiler::Compiler(rx::GLImplFactory *implFactory, const State &state, egl::Disp
 
     // APPLE_clip_distance/EXT_clip_cull_distance
     mResources.MaxClipDistances = caps.maxClipDistances;
+
+    // OES_sample_variables
+    mResources.OES_sample_variables = extensions.sampleVariablesOES;
+    mResources.MaxSamples           = caps.maxSamples;
 
     // GLSL ES 3.1 constants
     mResources.MaxProgramTextureGatherOffset    = caps.maxProgramTextureGatherOffset;

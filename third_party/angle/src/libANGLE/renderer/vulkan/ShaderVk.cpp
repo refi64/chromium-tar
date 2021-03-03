@@ -72,6 +72,12 @@ std::shared_ptr<WaitableCompileEvent> ShaderVk::compile(const gl::Context *conte
     // context state does not allow it
     compileOptions |= SH_EARLY_FRAGMENT_TESTS_OPTIMIZATION;
 
+    // Let compiler use specialized constant for pre-rotation.
+    if (!contextVk->getFeatures().forceDriverUniformOverSpecConst.enabled)
+    {
+        compileOptions |= SH_USE_SPECIALIZATION_CONSTANT;
+    }
+
     if (contextVk->getFeatures().enablePreRotateSurfaces.enabled ||
         contextVk->getFeatures().emulatedPrerotation90.enabled ||
         contextVk->getFeatures().emulatedPrerotation180.enabled ||
@@ -79,6 +85,11 @@ std::shared_ptr<WaitableCompileEvent> ShaderVk::compile(const gl::Context *conte
     {
         // Let compiler insert pre-rotation code.
         compileOptions |= SH_ADD_PRE_ROTATION;
+    }
+
+    if (contextVk->getFeatures().emulateTransformFeedback.enabled)
+    {
+        compileOptions |= SH_ADD_VULKAN_XFB_EMULATION_SUPPORT_CODE;
     }
 
     return compileImpl(context, compilerInstance, mState.getSource(), compileOptions | options);

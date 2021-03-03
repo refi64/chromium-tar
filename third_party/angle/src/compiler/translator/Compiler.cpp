@@ -21,34 +21,35 @@
 #include "compiler/translator/ValidateOutputs.h"
 #include "compiler/translator/ValidateVaryingLocations.h"
 #include "compiler/translator/VariablePacker.h"
-#include "compiler/translator/tree_ops/AddAndTrueToLoopCondition.h"
-#include "compiler/translator/tree_ops/ClampFragDepth.h"
 #include "compiler/translator/tree_ops/ClampPointSize.h"
 #include "compiler/translator/tree_ops/DeclareAndInitBuiltinsForInstancedMultiview.h"
 #include "compiler/translator/tree_ops/DeferGlobalInitializers.h"
-#include "compiler/translator/tree_ops/EarlyFragmentTestsOptimization.h"
 #include "compiler/translator/tree_ops/EmulateGLFragColorBroadcast.h"
 #include "compiler/translator/tree_ops/EmulateMultiDrawShaderBuiltins.h"
 #include "compiler/translator/tree_ops/EmulatePrecision.h"
 #include "compiler/translator/tree_ops/FoldExpressions.h"
+#include "compiler/translator/tree_ops/ForcePrecisionQualifier.h"
 #include "compiler/translator/tree_ops/InitializeVariables.h"
 #include "compiler/translator/tree_ops/PruneEmptyCases.h"
 #include "compiler/translator/tree_ops/PruneNoOps.h"
-#include "compiler/translator/tree_ops/RegenerateStructNames.h"
 #include "compiler/translator/tree_ops/RemoveArrayLengthMethod.h"
 #include "compiler/translator/tree_ops/RemoveDynamicIndexing.h"
 #include "compiler/translator/tree_ops/RemoveInvariantDeclaration.h"
 #include "compiler/translator/tree_ops/RemovePow.h"
 #include "compiler/translator/tree_ops/RemoveUnreferencedVariables.h"
-#include "compiler/translator/tree_ops/RewriteDoWhile.h"
-#include "compiler/translator/tree_ops/RewriteRepeatedAssignToSwizzled.h"
 #include "compiler/translator/tree_ops/ScalarizeVecAndMatConstructorArgs.h"
 #include "compiler/translator/tree_ops/SeparateDeclarations.h"
 #include "compiler/translator/tree_ops/SimplifyLoopConditions.h"
 #include "compiler/translator/tree_ops/SplitSequenceOperator.h"
-#include "compiler/translator/tree_ops/UnfoldShortCircuitAST.h"
-#include "compiler/translator/tree_ops/UseInterfaceBlockFields.h"
-#include "compiler/translator/tree_ops/VectorizeVectorScalarArithmetic.h"
+#include "compiler/translator/tree_ops/gl/ClampFragDepth.h"
+#include "compiler/translator/tree_ops/gl/RegenerateStructNames.h"
+#include "compiler/translator/tree_ops/gl/RewriteRepeatedAssignToSwizzled.h"
+#include "compiler/translator/tree_ops/gl/UseInterfaceBlockFields.h"
+#include "compiler/translator/tree_ops/gl/VectorizeVectorScalarArithmetic.h"
+#include "compiler/translator/tree_ops/gl/mac/AddAndTrueToLoopCondition.h"
+#include "compiler/translator/tree_ops/gl/mac/RewriteDoWhile.h"
+#include "compiler/translator/tree_ops/gl/mac/UnfoldShortCircuitAST.h"
+#include "compiler/translator/tree_ops/vulkan/EarlyFragmentTestsOptimization.h"
 #include "compiler/translator/tree_util/BuiltIn.h"
 #include "compiler/translator/tree_util/IntermNodePatternMatcher.h"
 #include "compiler/translator/tree_util/ReplaceShadowingVariables.h"
@@ -218,6 +219,8 @@ int GetMaxShaderVersionForSpec(ShShaderSpec spec)
         case SH_GLES3_1_SPEC:
         case SH_WEBGL3_SPEC:
             return 310;
+        case SH_GLES3_2_SPEC:
+            return 320;
         case SH_GL_CORE_SPEC:
         case SH_GL_COMPATIBILITY_SPEC:
             return 460;
@@ -451,7 +454,7 @@ bool TCompiler::checkShaderVersion(TParseContext *parseContext)
             }
             else
             {
-                ASSERT(mShaderVersion == 310);
+                ASSERT(mShaderVersion == 310 || mShaderVersion == 320);
                 if (!parseContext->checkCanUseExtension(sh::TSourceLoc(),
                                                         TExtension::EXT_geometry_shader))
                 {
@@ -676,9 +679,7 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
 
     if (compileOptions & SH_REGENERATE_STRUCT_NAMES)
     {
-        RegenerateStructNames gen(&mSymbolTable);
-        root->traverse(&gen);
-        if (!validateAST(root))
+        if (!RegenerateStructNames(this, root, &mSymbolTable))
         {
             return false;
         }
@@ -790,13 +791,21 @@ bool TCompiler::checkAndSimplifyAST(TIntermBlock *root,
         }
     }
 
+    if (compileOptions & SH_FORCE_SHADER_PRECISION_HIGHP_TO_MEDIUMP)
+    {
+        if (!ForceShaderPrecisionToMediump(root, &mSymbolTable, mShaderType))
+        {
+            return false;
+        }
+    }
+
     if (shouldCollectVariables(compileOptions))
     {
         ASSERT(!mVariablesCollected);
         CollectVariables(root, &mAttributes, &mOutputVariables, &mUniforms, &mInputVaryings,
                          &mOutputVaryings, &mSharedVariables, &mUniformBlocks,
-                         &mShaderStorageBlocks, &mInBlocks, mResources.HashFunction, &mSymbolTable,
-                         mShaderType, mExtensionBehavior);
+                         &mShaderStorageBlocks, mResources.HashFunction, &mSymbolTable, mShaderType,
+                         mExtensionBehavior);
         collectInterfaceBlocks();
         mVariablesCollected = true;
         if (compileOptions & SH_USE_UNUSED_STANDARD_SHARED_BLOCKS)
@@ -1074,6 +1083,8 @@ void TCompiler::setResourceString()
         << ":OVR_multiview:" << mResources.OVR_multiview
         << ":EXT_YUV_target:" << mResources.EXT_YUV_target
         << ":EXT_geometry_shader:" << mResources.EXT_geometry_shader
+        << ":OES_shader_io_blocks:" << mResources.OES_shader_io_blocks
+        << ":EXT_shader_io_blocks:" << mResources.EXT_shader_io_blocks
         << ":EXT_gpu_shader5:" << mResources.EXT_gpu_shader5
         << ":OES_texture_3D:" << mResources.OES_texture_3D
         << ":MaxVertexOutputVectors:" << mResources.MaxVertexOutputVectors
@@ -1094,9 +1105,11 @@ void TCompiler::setResourceString()
         << ":OES_shader_image_atomic:" << mResources.OES_shader_image_atomic
         << ":OES_texture_buffer:" << mResources.OES_texture_buffer
         << ":EXT_texture_buffer:" << mResources.EXT_texture_buffer
+        << ":OES_sample_variables:" << mResources.OES_sample_variables
         << ":MinProgramTextureGatherOffset:" << mResources.MinProgramTextureGatherOffset
         << ":MaxProgramTextureGatherOffset:" << mResources.MaxProgramTextureGatherOffset
         << ":MaxImageUnits:" << mResources.MaxImageUnits
+        << ":MaxSamples:" << mResources.MaxSamples
         << ":MaxVertexImageUniforms:" << mResources.MaxVertexImageUniforms
         << ":MaxFragmentImageUniforms:" << mResources.MaxFragmentImageUniforms
         << ":MaxComputeImageUniforms:" << mResources.MaxComputeImageUniforms
@@ -1141,12 +1154,10 @@ void TCompiler::setResourceString()
 void TCompiler::collectInterfaceBlocks()
 {
     ASSERT(mInterfaceBlocks.empty());
-    mInterfaceBlocks.reserve(mUniformBlocks.size() + mShaderStorageBlocks.size() +
-                             mInBlocks.size());
+    mInterfaceBlocks.reserve(mUniformBlocks.size() + mShaderStorageBlocks.size());
     mInterfaceBlocks.insert(mInterfaceBlocks.end(), mUniformBlocks.begin(), mUniformBlocks.end());
     mInterfaceBlocks.insert(mInterfaceBlocks.end(), mShaderStorageBlocks.begin(),
                             mShaderStorageBlocks.end());
-    mInterfaceBlocks.insert(mInterfaceBlocks.end(), mInBlocks.begin(), mInBlocks.end());
 }
 
 bool TCompiler::emulatePrecisionIfNeeded(TIntermBlock *root,
@@ -1186,7 +1197,6 @@ void TCompiler::clearResults()
     mInterfaceBlocks.clear();
     mUniformBlocks.clear();
     mShaderStorageBlocks.clear();
-    mInBlocks.clear();
     mVariablesCollected    = false;
     mGLPositionInitialized = false;
 
@@ -1234,7 +1244,7 @@ bool TCompiler::checkCallDepth()
         int depth                     = 0;
         const CallDAG::Record &record = mCallDag.getRecordFromIndex(i);
 
-        for (const int &calleeIndex : record.callees)
+        for (int calleeIndex : record.callees)
         {
             depth = std::max(depth, depths[calleeIndex] + 1);
         }

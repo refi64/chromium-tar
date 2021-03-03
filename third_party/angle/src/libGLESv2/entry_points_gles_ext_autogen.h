@@ -651,6 +651,8 @@ ANGLE_EXPORT void GL_APIENTRY LoseContextCHROMIUM(GLenum current, GLenum other);
 
 // GL_EXT_EGL_image_array
 
+// GL_EXT_YUV_target
+
 // GL_EXT_blend_func_extended
 ANGLE_EXPORT void GL_APIENTRY BindFragDataLocationEXT(GLuint program,
                                                       GLuint color,
@@ -670,6 +672,9 @@ ANGLE_EXPORT void GL_APIENTRY BufferStorageEXT(GLenum target,
                                                const void *data,
                                                GLbitfield flags);
 
+// GL_EXT_clip_control
+ANGLE_EXPORT void GL_APIENTRY ClipControlEXT(GLenum origin, GLenum depth);
+
 // GL_EXT_copy_image
 ANGLE_EXPORT void GL_APIENTRY CopyImageSubDataEXT(GLuint srcName,
                                                   GLenum srcTarget,
@@ -686,6 +691,14 @@ ANGLE_EXPORT void GL_APIENTRY CopyImageSubDataEXT(GLuint srcName,
                                                   GLsizei srcWidth,
                                                   GLsizei srcHeight,
                                                   GLsizei srcDepth);
+
+// GL_EXT_debug_label
+ANGLE_EXPORT void GL_APIENTRY
+GetObjectLabelEXT(GLenum type, GLuint object, GLsizei bufSize, GLsizei *length, GLchar *label);
+ANGLE_EXPORT void GL_APIENTRY LabelObjectEXT(GLenum type,
+                                             GLuint object,
+                                             GLsizei length,
+                                             const GLchar *label);
 
 // GL_EXT_debug_marker
 ANGLE_EXPORT void GL_APIENTRY InsertEventMarkerEXT(GLsizei length, const GLchar *marker);
@@ -912,6 +925,154 @@ ANGLE_EXPORT void GL_APIENTRY WaitSemaphoreEXT(GLuint semaphore,
 // GL_EXT_semaphore_fd
 ANGLE_EXPORT void GL_APIENTRY ImportSemaphoreFdEXT(GLuint semaphore, GLenum handleType, GLint fd);
 
+// GL_EXT_separate_shader_objects
+ANGLE_EXPORT void GL_APIENTRY ActiveShaderProgramEXT(GLuint pipeline, GLuint program);
+ANGLE_EXPORT void GL_APIENTRY BindProgramPipelineEXT(GLuint pipeline);
+ANGLE_EXPORT GLuint GL_APIENTRY CreateShaderProgramvEXT(GLenum type,
+                                                        GLsizei count,
+                                                        const GLchar **strings);
+ANGLE_EXPORT void GL_APIENTRY DeleteProgramPipelinesEXT(GLsizei n, const GLuint *pipelines);
+ANGLE_EXPORT void GL_APIENTRY GenProgramPipelinesEXT(GLsizei n, GLuint *pipelines);
+ANGLE_EXPORT void GL_APIENTRY GetProgramPipelineInfoLogEXT(GLuint pipeline,
+                                                           GLsizei bufSize,
+                                                           GLsizei *length,
+                                                           GLchar *infoLog);
+ANGLE_EXPORT void GL_APIENTRY GetProgramPipelineivEXT(GLuint pipeline, GLenum pname, GLint *params);
+ANGLE_EXPORT GLboolean GL_APIENTRY IsProgramPipelineEXT(GLuint pipeline);
+ANGLE_EXPORT void GL_APIENTRY ProgramParameteriEXT(GLuint program, GLenum pname, GLint value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1fEXT(GLuint program, GLint location, GLfloat v0);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1fvEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1iEXT(GLuint program, GLint location, GLint v0);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1ivEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1uiEXT(GLuint program, GLint location, GLuint v0);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1uivEXT(GLuint program,
+                                                    GLint location,
+                                                    GLsizei count,
+                                                    const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2fEXT(GLuint program,
+                                                  GLint location,
+                                                  GLfloat v0,
+                                                  GLfloat v1);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2fvEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2iEXT(GLuint program,
+                                                  GLint location,
+                                                  GLint v0,
+                                                  GLint v1);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2ivEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2uiEXT(GLuint program,
+                                                   GLint location,
+                                                   GLuint v0,
+                                                   GLuint v1);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2uivEXT(GLuint program,
+                                                    GLint location,
+                                                    GLsizei count,
+                                                    const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY
+ProgramUniform3fEXT(GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3fvEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY
+ProgramUniform3iEXT(GLuint program, GLint location, GLint v0, GLint v1, GLint v2);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3ivEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY
+ProgramUniform3uiEXT(GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3uivEXT(GLuint program,
+                                                    GLint location,
+                                                    GLsizei count,
+                                                    const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY
+ProgramUniform4fEXT(GLuint program, GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4fvEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY
+ProgramUniform4iEXT(GLuint program, GLint location, GLint v0, GLint v1, GLint v2, GLint v3);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4ivEXT(GLuint program,
+                                                   GLint location,
+                                                   GLsizei count,
+                                                   const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY
+ProgramUniform4uiEXT(GLuint program, GLint location, GLuint v0, GLuint v1, GLuint v2, GLuint v3);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4uivEXT(GLuint program,
+                                                    GLint location,
+                                                    GLsizei count,
+                                                    const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2fvEXT(GLuint program,
+                                                         GLint location,
+                                                         GLsizei count,
+                                                         GLboolean transpose,
+                                                         const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2x3fvEXT(GLuint program,
+                                                           GLint location,
+                                                           GLsizei count,
+                                                           GLboolean transpose,
+                                                           const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2x4fvEXT(GLuint program,
+                                                           GLint location,
+                                                           GLsizei count,
+                                                           GLboolean transpose,
+                                                           const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3fvEXT(GLuint program,
+                                                         GLint location,
+                                                         GLsizei count,
+                                                         GLboolean transpose,
+                                                         const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3x2fvEXT(GLuint program,
+                                                           GLint location,
+                                                           GLsizei count,
+                                                           GLboolean transpose,
+                                                           const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3x4fvEXT(GLuint program,
+                                                           GLint location,
+                                                           GLsizei count,
+                                                           GLboolean transpose,
+                                                           const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4fvEXT(GLuint program,
+                                                         GLint location,
+                                                         GLsizei count,
+                                                         GLboolean transpose,
+                                                         const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4x2fvEXT(GLuint program,
+                                                           GLint location,
+                                                           GLsizei count,
+                                                           GLboolean transpose,
+                                                           const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4x3fvEXT(GLuint program,
+                                                           GLint location,
+                                                           GLsizei count,
+                                                           GLboolean transpose,
+                                                           const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY UseProgramStagesEXT(GLuint pipeline,
+                                                  GLbitfield stages,
+                                                  GLuint program);
+ANGLE_EXPORT void GL_APIENTRY ValidateProgramPipelineEXT(GLuint pipeline);
+
+// GL_EXT_shader_framebuffer_fetch_non_coherent
+ANGLE_EXPORT void GL_APIENTRY FramebufferFetchBarrierEXT();
+
+// GL_EXT_shader_io_blocks
+
+// GL_EXT_tessellation_shader
+ANGLE_EXPORT void GL_APIENTRY PatchParameteriEXT(GLenum pname, GLint value);
+
 // GL_EXT_texture_buffer
 ANGLE_EXPORT void GL_APIENTRY TexBufferEXT(GLenum target, GLenum internalformat, GLuint buffer);
 ANGLE_EXPORT void GL_APIENTRY TexBufferRangeEXT(GLenum target,
@@ -1009,6 +1170,18 @@ ANGLE_EXPORT void GL_APIENTRY GetFenceivNV(GLuint fence, GLenum pname, GLint *pa
 ANGLE_EXPORT GLboolean GL_APIENTRY IsFenceNV(GLuint fence);
 ANGLE_EXPORT void GL_APIENTRY SetFenceNV(GLuint fence, GLenum condition);
 ANGLE_EXPORT GLboolean GL_APIENTRY TestFenceNV(GLuint fence);
+
+// GL_NV_framebuffer_blit
+ANGLE_EXPORT void GL_APIENTRY BlitFramebufferNV(GLint srcX0,
+                                                GLint srcY0,
+                                                GLint srcX1,
+                                                GLint srcY1,
+                                                GLint dstX0,
+                                                GLint dstY0,
+                                                GLint dstX1,
+                                                GLint dstY1,
+                                                GLbitfield mask,
+                                                GLenum filter);
 
 // GL_OES_EGL_image
 ANGLE_EXPORT void GL_APIENTRY EGLImageTargetRenderbufferStorageOES(GLenum target,
@@ -1152,6 +1325,8 @@ ANGLE_EXPORT GLbitfield GL_APIENTRY QueryMatrixxOES(GLfixed *mantissa, GLint *ex
 // GL_OES_sample_shading
 ANGLE_EXPORT void GL_APIENTRY MinSampleShadingOES(GLfloat value);
 
+// GL_OES_shader_io_blocks
+
 // GL_OES_texture_3D
 ANGLE_EXPORT void GL_APIENTRY CompressedTexImage3DOES(GLenum target,
                                                       GLint level,
@@ -1284,6 +1459,9 @@ ANGLE_EXPORT void GL_APIENTRY FramebufferTextureMultiviewOVR(GLenum target,
 ANGLE_EXPORT void GL_APIENTRY ActiveShaderProgramContextANGLE(GLeglContext ctx,
                                                               GLuint pipeline,
                                                               GLuint program);
+ANGLE_EXPORT void GL_APIENTRY ActiveShaderProgramEXTContextANGLE(GLeglContext ctx,
+                                                                 GLuint pipeline,
+                                                                 GLuint program);
 ANGLE_EXPORT void GL_APIENTRY ActiveTextureContextANGLE(GLeglContext ctx, GLenum texture);
 ANGLE_EXPORT void GL_APIENTRY AlphaFuncContextANGLE(GLeglContext ctx, GLenum func, GLfloat ref);
 ANGLE_EXPORT void GL_APIENTRY AlphaFuncxContextANGLE(GLeglContext ctx, GLenum func, GLfixed ref);
@@ -1335,6 +1513,7 @@ ANGLE_EXPORT void GL_APIENTRY BindImageTextureContextANGLE(GLeglContext ctx,
                                                            GLenum access,
                                                            GLenum format);
 ANGLE_EXPORT void GL_APIENTRY BindProgramPipelineContextANGLE(GLeglContext ctx, GLuint pipeline);
+ANGLE_EXPORT void GL_APIENTRY BindProgramPipelineEXTContextANGLE(GLeglContext ctx, GLuint pipeline);
 ANGLE_EXPORT void GL_APIENTRY BindRenderbufferContextANGLE(GLeglContext ctx,
                                                            GLenum target,
                                                            GLuint renderbuffer);
@@ -1443,6 +1622,17 @@ ANGLE_EXPORT void GL_APIENTRY BlitFramebufferANGLEContextANGLE(GLeglContext ctx,
                                                                GLint dstY1,
                                                                GLbitfield mask,
                                                                GLenum filter);
+ANGLE_EXPORT void GL_APIENTRY BlitFramebufferNVContextANGLE(GLeglContext ctx,
+                                                            GLint srcX0,
+                                                            GLint srcY0,
+                                                            GLint srcX1,
+                                                            GLint srcY1,
+                                                            GLint dstX0,
+                                                            GLint dstY0,
+                                                            GLint dstX1,
+                                                            GLint dstY1,
+                                                            GLbitfield mask,
+                                                            GLenum filter);
 ANGLE_EXPORT void GL_APIENTRY BufferDataContextANGLE(GLeglContext ctx,
                                                      GLenum target,
                                                      GLsizeiptr size,
@@ -1503,6 +1693,9 @@ ANGLE_EXPORT GLenum GL_APIENTRY ClientWaitSyncContextANGLE(GLeglContext ctx,
                                                            GLsync sync,
                                                            GLbitfield flags,
                                                            GLuint64 timeout);
+ANGLE_EXPORT void GL_APIENTRY ClipControlEXTContextANGLE(GLeglContext ctx,
+                                                         GLenum origin,
+                                                         GLenum depth);
 ANGLE_EXPORT void GL_APIENTRY ClipPlanefContextANGLE(GLeglContext ctx,
                                                      GLenum p,
                                                      const GLfloat *eqn);
@@ -1708,6 +1901,10 @@ ANGLE_EXPORT GLuint GL_APIENTRY CreateShaderProgramvContextANGLE(GLeglContext ct
                                                                  GLenum type,
                                                                  GLsizei count,
                                                                  const GLchar *const *strings);
+ANGLE_EXPORT GLuint GL_APIENTRY CreateShaderProgramvEXTContextANGLE(GLeglContext ctx,
+                                                                    GLenum type,
+                                                                    GLsizei count,
+                                                                    const GLchar **strings);
 ANGLE_EXPORT void GL_APIENTRY CullFaceContextANGLE(GLeglContext ctx, GLenum mode);
 ANGLE_EXPORT void GL_APIENTRY CurrentPaletteMatrixOESContextANGLE(GLeglContext ctx,
                                                                   GLuint matrixpaletteindex);
@@ -1764,6 +1961,9 @@ ANGLE_EXPORT void GL_APIENTRY DeleteProgramContextANGLE(GLeglContext ctx, GLuint
 ANGLE_EXPORT void GL_APIENTRY DeleteProgramPipelinesContextANGLE(GLeglContext ctx,
                                                                  GLsizei n,
                                                                  const GLuint *pipelines);
+ANGLE_EXPORT void GL_APIENTRY DeleteProgramPipelinesEXTContextANGLE(GLeglContext ctx,
+                                                                    GLsizei n,
+                                                                    const GLuint *pipelines);
 ANGLE_EXPORT void GL_APIENTRY DeleteQueriesContextANGLE(GLeglContext ctx,
                                                         GLsizei n,
                                                         const GLuint *ids);
@@ -2009,6 +2209,7 @@ ANGLE_EXPORT void GL_APIENTRY FogxContextANGLE(GLeglContext ctx, GLenum pname, G
 ANGLE_EXPORT void GL_APIENTRY FogxvContextANGLE(GLeglContext ctx,
                                                 GLenum pname,
                                                 const GLfixed *param);
+ANGLE_EXPORT void GL_APIENTRY FramebufferFetchBarrierEXTContextANGLE(GLeglContext ctx);
 ANGLE_EXPORT void GL_APIENTRY FramebufferParameteriContextANGLE(GLeglContext ctx,
                                                                 GLenum target,
                                                                 GLenum pname,
@@ -2098,6 +2299,9 @@ ANGLE_EXPORT void GL_APIENTRY GenFramebuffersOESContextANGLE(GLeglContext ctx,
 ANGLE_EXPORT void GL_APIENTRY GenProgramPipelinesContextANGLE(GLeglContext ctx,
                                                               GLsizei n,
                                                               GLuint *pipelines);
+ANGLE_EXPORT void GL_APIENTRY GenProgramPipelinesEXTContextANGLE(GLeglContext ctx,
+                                                                 GLsizei n,
+                                                                 GLuint *pipelines);
 ANGLE_EXPORT void GL_APIENTRY GenQueriesContextANGLE(GLeglContext ctx, GLsizei n, GLuint *ids);
 ANGLE_EXPORT void GL_APIENTRY GenQueriesEXTContextANGLE(GLeglContext ctx, GLsizei n, GLuint *ids);
 ANGLE_EXPORT void GL_APIENTRY GenRenderbuffersContextANGLE(GLeglContext ctx,
@@ -2296,6 +2500,12 @@ ANGLE_EXPORT void GL_APIENTRY GetObjectLabelContextANGLE(GLeglContext ctx,
                                                          GLsizei bufSize,
                                                          GLsizei *length,
                                                          GLchar *label);
+ANGLE_EXPORT void GL_APIENTRY GetObjectLabelEXTContextANGLE(GLeglContext ctx,
+                                                            GLenum type,
+                                                            GLuint object,
+                                                            GLsizei bufSize,
+                                                            GLsizei *length,
+                                                            GLchar *label);
 ANGLE_EXPORT void GL_APIENTRY GetObjectLabelKHRContextANGLE(GLeglContext ctx,
                                                             GLenum identifier,
                                                             GLuint name,
@@ -2345,10 +2555,19 @@ ANGLE_EXPORT void GL_APIENTRY GetProgramPipelineInfoLogContextANGLE(GLeglContext
                                                                     GLsizei bufSize,
                                                                     GLsizei *length,
                                                                     GLchar *infoLog);
+ANGLE_EXPORT void GL_APIENTRY GetProgramPipelineInfoLogEXTContextANGLE(GLeglContext ctx,
+                                                                       GLuint pipeline,
+                                                                       GLsizei bufSize,
+                                                                       GLsizei *length,
+                                                                       GLchar *infoLog);
 ANGLE_EXPORT void GL_APIENTRY GetProgramPipelineivContextANGLE(GLeglContext ctx,
                                                                GLuint pipeline,
                                                                GLenum pname,
                                                                GLint *params);
+ANGLE_EXPORT void GL_APIENTRY GetProgramPipelineivEXTContextANGLE(GLeglContext ctx,
+                                                                  GLuint pipeline,
+                                                                  GLenum pname,
+                                                                  GLint *params);
 ANGLE_EXPORT GLuint GL_APIENTRY GetProgramResourceIndexContextANGLE(GLeglContext ctx,
                                                                     GLuint program,
                                                                     GLenum programInterface,
@@ -2669,6 +2888,8 @@ ANGLE_EXPORT GLboolean GL_APIENTRY IsMemoryObjectEXTContextANGLE(GLeglContext ct
                                                                  GLuint memoryObject);
 ANGLE_EXPORT GLboolean GL_APIENTRY IsProgramContextANGLE(GLeglContext ctx, GLuint program);
 ANGLE_EXPORT GLboolean GL_APIENTRY IsProgramPipelineContextANGLE(GLeglContext ctx, GLuint pipeline);
+ANGLE_EXPORT GLboolean GL_APIENTRY IsProgramPipelineEXTContextANGLE(GLeglContext ctx,
+                                                                    GLuint pipeline);
 ANGLE_EXPORT GLboolean GL_APIENTRY IsQueryContextANGLE(GLeglContext ctx, GLuint id);
 ANGLE_EXPORT GLboolean GL_APIENTRY IsQueryEXTContextANGLE(GLeglContext ctx, GLuint id);
 ANGLE_EXPORT GLboolean GL_APIENTRY IsRenderbufferContextANGLE(GLeglContext ctx,
@@ -2683,6 +2904,11 @@ ANGLE_EXPORT GLboolean GL_APIENTRY IsTextureContextANGLE(GLeglContext ctx, GLuin
 ANGLE_EXPORT GLboolean GL_APIENTRY IsTransformFeedbackContextANGLE(GLeglContext ctx, GLuint id);
 ANGLE_EXPORT GLboolean GL_APIENTRY IsVertexArrayContextANGLE(GLeglContext ctx, GLuint array);
 ANGLE_EXPORT GLboolean GL_APIENTRY IsVertexArrayOESContextANGLE(GLeglContext ctx, GLuint array);
+ANGLE_EXPORT void GL_APIENTRY LabelObjectEXTContextANGLE(GLeglContext ctx,
+                                                         GLenum type,
+                                                         GLuint object,
+                                                         GLsizei length,
+                                                         const GLchar *label);
 ANGLE_EXPORT void GL_APIENTRY LightModelfContextANGLE(GLeglContext ctx,
                                                       GLenum pname,
                                                       GLfloat param);
@@ -2840,6 +3066,9 @@ ANGLE_EXPORT void GL_APIENTRY OrthoxContextANGLE(GLeglContext ctx,
 ANGLE_EXPORT void GL_APIENTRY PatchParameteriContextANGLE(GLeglContext ctx,
                                                           GLenum pname,
                                                           GLint value);
+ANGLE_EXPORT void GL_APIENTRY PatchParameteriEXTContextANGLE(GLeglContext ctx,
+                                                             GLenum pname,
+                                                             GLint value);
 ANGLE_EXPORT void GL_APIENTRY PauseTransformFeedbackContextANGLE(GLeglContext ctx);
 ANGLE_EXPORT void GL_APIENTRY PixelStoreiContextANGLE(GLeglContext ctx, GLenum pname, GLint param);
 ANGLE_EXPORT void GL_APIENTRY PointParameterfContextANGLE(GLeglContext ctx,
@@ -2893,93 +3122,187 @@ ANGLE_EXPORT void GL_APIENTRY ProgramParameteriContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLenum pname,
                                                             GLint value);
+ANGLE_EXPORT void GL_APIENTRY ProgramParameteriEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLenum pname,
+                                                               GLint value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform1fContextANGLE(GLeglContext ctx,
                                                            GLuint program,
                                                            GLint location,
                                                            GLfloat v0);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1fEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLfloat v0);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform1fvContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1fvEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform1iContextANGLE(GLeglContext ctx,
                                                            GLuint program,
                                                            GLint location,
                                                            GLint v0);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1iEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLint v0);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform1ivContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1ivEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform1uiContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLuint v0);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1uiEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLuint v0);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform1uivContextANGLE(GLeglContext ctx,
                                                              GLuint program,
                                                              GLint location,
                                                              GLsizei count,
                                                              const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform1uivEXTContextANGLE(GLeglContext ctx,
+                                                                GLuint program,
+                                                                GLint location,
+                                                                GLsizei count,
+                                                                const GLuint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform2fContextANGLE(GLeglContext ctx,
                                                            GLuint program,
                                                            GLint location,
                                                            GLfloat v0,
                                                            GLfloat v1);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2fEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLfloat v0,
+                                                              GLfloat v1);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform2fvContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2fvEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY
 ProgramUniform2iContextANGLE(GLeglContext ctx, GLuint program, GLint location, GLint v0, GLint v1);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2iEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLint v0,
+                                                              GLint v1);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform2ivContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2ivEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform2uiContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLuint v0,
                                                             GLuint v1);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2uiEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLuint v0,
+                                                               GLuint v1);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform2uivContextANGLE(GLeglContext ctx,
                                                              GLuint program,
                                                              GLint location,
                                                              GLsizei count,
                                                              const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform2uivEXTContextANGLE(GLeglContext ctx,
+                                                                GLuint program,
+                                                                GLint location,
+                                                                GLsizei count,
+                                                                const GLuint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform3fContextANGLE(GLeglContext ctx,
                                                            GLuint program,
                                                            GLint location,
                                                            GLfloat v0,
                                                            GLfloat v1,
                                                            GLfloat v2);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3fEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLfloat v0,
+                                                              GLfloat v1,
+                                                              GLfloat v2);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform3fvContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3fvEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform3iContextANGLE(GLeglContext ctx,
                                                            GLuint program,
                                                            GLint location,
                                                            GLint v0,
                                                            GLint v1,
                                                            GLint v2);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3iEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLint v0,
+                                                              GLint v1,
+                                                              GLint v2);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform3ivContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3ivEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform3uiContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLuint v0,
                                                             GLuint v1,
                                                             GLuint v2);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3uiEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLuint v0,
+                                                               GLuint v1,
+                                                               GLuint v2);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform3uivContextANGLE(GLeglContext ctx,
                                                              GLuint program,
                                                              GLint location,
                                                              GLsizei count,
                                                              const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform3uivEXTContextANGLE(GLeglContext ctx,
+                                                                GLuint program,
+                                                                GLint location,
+                                                                GLsizei count,
+                                                                const GLuint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform4fContextANGLE(GLeglContext ctx,
                                                            GLuint program,
                                                            GLint location,
@@ -2987,11 +3310,23 @@ ANGLE_EXPORT void GL_APIENTRY ProgramUniform4fContextANGLE(GLeglContext ctx,
                                                            GLfloat v1,
                                                            GLfloat v2,
                                                            GLfloat v3);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4fEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLfloat v0,
+                                                              GLfloat v1,
+                                                              GLfloat v2,
+                                                              GLfloat v3);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform4fvContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4fvEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform4iContextANGLE(GLeglContext ctx,
                                                            GLuint program,
                                                            GLint location,
@@ -2999,11 +3334,23 @@ ANGLE_EXPORT void GL_APIENTRY ProgramUniform4iContextANGLE(GLeglContext ctx,
                                                            GLint v1,
                                                            GLint v2,
                                                            GLint v3);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4iEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint program,
+                                                              GLint location,
+                                                              GLint v0,
+                                                              GLint v1,
+                                                              GLint v2,
+                                                              GLint v3);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform4ivContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
                                                             GLsizei count,
                                                             const GLint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4ivEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLsizei count,
+                                                               const GLint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform4uiContextANGLE(GLeglContext ctx,
                                                             GLuint program,
                                                             GLint location,
@@ -3011,65 +3358,131 @@ ANGLE_EXPORT void GL_APIENTRY ProgramUniform4uiContextANGLE(GLeglContext ctx,
                                                             GLuint v1,
                                                             GLuint v2,
                                                             GLuint v3);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4uiEXTContextANGLE(GLeglContext ctx,
+                                                               GLuint program,
+                                                               GLint location,
+                                                               GLuint v0,
+                                                               GLuint v1,
+                                                               GLuint v2,
+                                                               GLuint v3);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniform4uivContextANGLE(GLeglContext ctx,
                                                              GLuint program,
                                                              GLint location,
                                                              GLsizei count,
                                                              const GLuint *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniform4uivEXTContextANGLE(GLeglContext ctx,
+                                                                GLuint program,
+                                                                GLint location,
+                                                                GLsizei count,
+                                                                const GLuint *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2fvContextANGLE(GLeglContext ctx,
                                                                   GLuint program,
                                                                   GLint location,
                                                                   GLsizei count,
                                                                   GLboolean transpose,
                                                                   const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2fvEXTContextANGLE(GLeglContext ctx,
+                                                                     GLuint program,
+                                                                     GLint location,
+                                                                     GLsizei count,
+                                                                     GLboolean transpose,
+                                                                     const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2x3fvContextANGLE(GLeglContext ctx,
                                                                     GLuint program,
                                                                     GLint location,
                                                                     GLsizei count,
                                                                     GLboolean transpose,
                                                                     const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2x3fvEXTContextANGLE(GLeglContext ctx,
+                                                                       GLuint program,
+                                                                       GLint location,
+                                                                       GLsizei count,
+                                                                       GLboolean transpose,
+                                                                       const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2x4fvContextANGLE(GLeglContext ctx,
                                                                     GLuint program,
                                                                     GLint location,
                                                                     GLsizei count,
                                                                     GLboolean transpose,
                                                                     const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix2x4fvEXTContextANGLE(GLeglContext ctx,
+                                                                       GLuint program,
+                                                                       GLint location,
+                                                                       GLsizei count,
+                                                                       GLboolean transpose,
+                                                                       const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3fvContextANGLE(GLeglContext ctx,
                                                                   GLuint program,
                                                                   GLint location,
                                                                   GLsizei count,
                                                                   GLboolean transpose,
                                                                   const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3fvEXTContextANGLE(GLeglContext ctx,
+                                                                     GLuint program,
+                                                                     GLint location,
+                                                                     GLsizei count,
+                                                                     GLboolean transpose,
+                                                                     const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3x2fvContextANGLE(GLeglContext ctx,
                                                                     GLuint program,
                                                                     GLint location,
                                                                     GLsizei count,
                                                                     GLboolean transpose,
                                                                     const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3x2fvEXTContextANGLE(GLeglContext ctx,
+                                                                       GLuint program,
+                                                                       GLint location,
+                                                                       GLsizei count,
+                                                                       GLboolean transpose,
+                                                                       const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3x4fvContextANGLE(GLeglContext ctx,
                                                                     GLuint program,
                                                                     GLint location,
                                                                     GLsizei count,
                                                                     GLboolean transpose,
                                                                     const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix3x4fvEXTContextANGLE(GLeglContext ctx,
+                                                                       GLuint program,
+                                                                       GLint location,
+                                                                       GLsizei count,
+                                                                       GLboolean transpose,
+                                                                       const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4fvContextANGLE(GLeglContext ctx,
                                                                   GLuint program,
                                                                   GLint location,
                                                                   GLsizei count,
                                                                   GLboolean transpose,
                                                                   const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4fvEXTContextANGLE(GLeglContext ctx,
+                                                                     GLuint program,
+                                                                     GLint location,
+                                                                     GLsizei count,
+                                                                     GLboolean transpose,
+                                                                     const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4x2fvContextANGLE(GLeglContext ctx,
                                                                     GLuint program,
                                                                     GLint location,
                                                                     GLsizei count,
                                                                     GLboolean transpose,
                                                                     const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4x2fvEXTContextANGLE(GLeglContext ctx,
+                                                                       GLuint program,
+                                                                       GLint location,
+                                                                       GLsizei count,
+                                                                       GLboolean transpose,
+                                                                       const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4x3fvContextANGLE(GLeglContext ctx,
                                                                     GLuint program,
                                                                     GLint location,
                                                                     GLsizei count,
                                                                     GLboolean transpose,
                                                                     const GLfloat *value);
+ANGLE_EXPORT void GL_APIENTRY ProgramUniformMatrix4x3fvEXTContextANGLE(GLeglContext ctx,
+                                                                       GLuint program,
+                                                                       GLint location,
+                                                                       GLsizei count,
+                                                                       GLboolean transpose,
+                                                                       const GLfloat *value);
 ANGLE_EXPORT void GL_APIENTRY PushDebugGroupContextANGLE(GLeglContext ctx,
                                                          GLenum source,
                                                          GLuint id,
@@ -3676,9 +4089,15 @@ ANGLE_EXPORT void GL_APIENTRY UseProgramStagesContextANGLE(GLeglContext ctx,
                                                            GLuint pipeline,
                                                            GLbitfield stages,
                                                            GLuint program);
+ANGLE_EXPORT void GL_APIENTRY UseProgramStagesEXTContextANGLE(GLeglContext ctx,
+                                                              GLuint pipeline,
+                                                              GLbitfield stages,
+                                                              GLuint program);
 ANGLE_EXPORT void GL_APIENTRY ValidateProgramContextANGLE(GLeglContext ctx, GLuint program);
 ANGLE_EXPORT void GL_APIENTRY ValidateProgramPipelineContextANGLE(GLeglContext ctx,
                                                                   GLuint pipeline);
+ANGLE_EXPORT void GL_APIENTRY ValidateProgramPipelineEXTContextANGLE(GLeglContext ctx,
+                                                                     GLuint pipeline);
 ANGLE_EXPORT void GL_APIENTRY VertexAttrib1fContextANGLE(GLeglContext ctx, GLuint index, GLfloat x);
 ANGLE_EXPORT void GL_APIENTRY VertexAttrib1fvContextANGLE(GLeglContext ctx,
                                                           GLuint index,

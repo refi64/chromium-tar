@@ -19,6 +19,8 @@ os.chdir(os.path.dirname(os.path.abspath(sys.argv[0])))
 sys.path.append('..')
 import angle_format
 
+generation_year = 2020  # Hard-code year to prevent yearly changes.
+
 
 def safe_append(the_dict, key, element):
     if key not in the_dict:
@@ -110,8 +112,7 @@ dispatch_table_source_template = """// GENERATED FILE - DO NOT EDIT.
 #include "libANGLE/renderer/gl/null_functions.h"
 #endif  // defined(ANGLE_ENABLE_OPENGL_NULL)
 
-// Check for nullptr so extensions do not overwrite core imports.
-#define ASSIGN(NAME, FP) if (!FP) FP = reinterpret_cast<decltype(FP)>(loadProcAddress(NAME))
+#define ASSIGN(NAME, FP) do {{ FP = reinterpret_cast<decltype(FP)>(loadProcAddress(NAME)); }} while (0)
 
 namespace rx
 {{
@@ -119,16 +120,18 @@ DispatchTableGL::DispatchTableGL() = default;
 
 void DispatchTableGL::initProcsDesktopGL(const gl::Version &version, const std::set<std::string> &extensions)
 {{
-{gl_data}
-
+#if defined(ANGLE_ENABLE_OPENGL_DESKTOP)
 {gl_extensions_data}
+
+{gl_data}
+#endif  // defined(ANGLE_ENABLE_OPENGL_DESKTOP)
 }}
 
 void DispatchTableGL::initProcsGLES(const gl::Version &version, const std::set<std::string> &extensions)
 {{
-{gles2_data}
-
 {gles2_extensions_data}
+
+{gles2_data}
 }}
 
 void DispatchTableGL::initProcsSharedExtensions(const std::set<std::string> &extensions)
@@ -139,16 +142,18 @@ void DispatchTableGL::initProcsSharedExtensions(const std::set<std::string> &ext
 #if defined(ANGLE_ENABLE_OPENGL_NULL)
 void DispatchTableGL::initProcsDesktopGLNULL(const gl::Version &version, const std::set<std::string> &extensions)
 {{
-{gl_null_data}
-
+#if defined(ANGLE_ENABLE_OPENGL_DESKTOP)
 {gl_null_extensions_data}
+
+{gl_null_data}
+#endif  // defined(ANGLE_ENABLE_OPENGL_DESKTOP)
 }}
 
 void DispatchTableGL::initProcsGLESNULL(const gl::Version &version, const std::set<std::string> &extensions)
 {{
-{gles2_null_data}
-
 {gles2_null_extensions_data}
+
+{gles2_null_data}
 }}
 
 void DispatchTableGL::initProcsSharedExtensionsNULL(const std::set<std::string> &extensions)
@@ -406,7 +411,7 @@ def main():
     dispatch_table_header = dispatch_table_header_template.format(
         script_name=os.path.basename(sys.argv[0]),
         data_source_name=data_source_name,
-        year=date.today().year,
+        year=generation_year,
         file_name=dispatch_header_path,
         table_data="\n\n".join(table_data))
 
@@ -439,7 +444,7 @@ def main():
     dispatch_table_source = dispatch_table_source_template.format(
         script_name=os.path.basename(sys.argv[0]),
         data_source_name=data_source_name,
-        year=date.today().year,
+        year=generation_year,
         file_name=dispatch_source_path,
         gl_data="\n\n".join(gl_data),
         gl_extensions_data="\n\n".join(gl_extensions_data),
@@ -486,7 +491,7 @@ def main():
     null_functions_header = null_functions_header_template.format(
         script_name=os.path.basename(sys.argv[0]),
         data_source_name=data_source_name,
-        year=date.today().year,
+        year=generation_year,
         file_name=null_functions_header_path,
         table_data="\n".join(null_decls))
 
@@ -496,7 +501,7 @@ def main():
     null_functions_source = null_functions_source_template.format(
         script_name=os.path.basename(sys.argv[0]),
         data_source_name=data_source_name,
-        year=date.today().year,
+        year=generation_year,
         file_name=null_functions_source_path,
         table_data="\n\n".join(null_stubs))
 

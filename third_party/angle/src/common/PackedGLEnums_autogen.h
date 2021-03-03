@@ -359,13 +359,15 @@ std::ostream &operator<<(std::ostream &os, QueryType value);
 
 enum class ShaderType : uint8_t
 {
-    Vertex   = 0,
-    Fragment = 1,
-    Geometry = 2,
-    Compute  = 3,
+    Vertex         = 0,
+    TessControl    = 1,
+    TessEvaluation = 2,
+    Geometry       = 3,
+    Fragment       = 4,
+    Compute        = 5,
 
-    InvalidEnum = 4,
-    EnumCount   = 4,
+    InvalidEnum = 6,
+    EnumCount   = 6,
 };
 
 template <>

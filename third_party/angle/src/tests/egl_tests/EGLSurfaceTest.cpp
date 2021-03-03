@@ -403,6 +403,9 @@ TEST_P(EGLSurfaceTest, MessageLoopBug)
     // http://anglebug.com/3138
     ANGLE_SKIP_TEST_IF(IsOzone());
 
+    // http://anglebug.com/5485
+    ANGLE_SKIP_TEST_IF(IsIOS());
+
     initializeDisplay();
     initializeSurfaceWithDefaultConfig(true);
 
@@ -418,6 +421,9 @@ TEST_P(EGLSurfaceTest, MessageLoopBugContext)
 
     // http://anglebug.com/3138
     ANGLE_SKIP_TEST_IF(IsOzone());
+
+    // http://anglebug.com/5485
+    ANGLE_SKIP_TEST_IF(IsIOS());
 
     initializeDisplay();
     initializeSurfaceWithDefaultConfig(true);
@@ -449,6 +455,8 @@ TEST_P(EGLSurfaceTest, ResizeWindow)
     ANGLE_SKIP_TEST_IF(isVulkanRenderer() && IsLinux() && IsIntel());
     // Flaky on Linux SwANGLE http://anglebug.com/4453
     ANGLE_SKIP_TEST_IF(IsLinux() && isSwiftshader());
+    // http://anglebug.com/5485
+    ANGLE_SKIP_TEST_IF(IsIOS());
 
     // Necessary for a window resizing test if there is no per-frame window size query
     setWindowVisible(mOSWindow, true);
@@ -502,6 +510,8 @@ TEST_P(EGLSurfaceTest, ResizeWindowWithDraw)
 {
     // http://anglebug.com/4453
     ANGLE_SKIP_TEST_IF(IsLinux());
+    // http://anglebug.com/5485
+    ANGLE_SKIP_TEST_IF(IsIOS());
 
     // Necessary for a window resizing test if there is no per-frame window size query
     setWindowVisible(mOSWindow, true);
@@ -1198,7 +1208,7 @@ TEST_P(EGLSurfaceTest, RobustResourceInitAndEmulatedAlpha)
     ANGLE_SKIP_TEST_IF(IsNVIDIA() && isGLRenderer() && IsLinux());
 
     // http://anglebug.com/5280
-    ANGLE_SKIP_TEST_IF(IsAndroid() && (IsNexus5X() || IsNexus6P()) && isGLESRenderer());
+    ANGLE_SKIP_TEST_IF(IsAndroid() && IsNexus5X() && isGLESRenderer());
 
     initializeDisplay();
     ASSERT_NE(mDisplay, EGL_NO_DISPLAY);

@@ -826,8 +826,10 @@ TEST_P(GLSLTest_ES3, GLVertexIDIntegerTextureDrawArrays)
     ANGLE_SKIP_TEST_IF(isSwiftshader());
     // http://anglebug.com/5232
     ANGLE_SKIP_TEST_IF(IsMetal());
-    // TODO(crbug.com/1132295): Failing on ARM-based Apple DTKs.
+    // TODO(anglebug.com/5360): Failing on ARM-based Apple DTKs.
     ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
+    // TODO(anglebug.com/5491): Failing on iOS, probably related to the ARM Mac failure above.
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
     // Have to set a large point size because the window size is much larger than the texture
     constexpr char kVS[] = R"(#version 300 es
 flat out highp int vVertexID;
@@ -886,7 +888,7 @@ TEST_P(GLSLTest_ES3, GLVertexIDOffsetFiveDrawArray)
     // http://anglebug.com/4092
     ANGLE_SKIP_TEST_IF(isSwiftshader());
     // Bug in Nexus drivers, offset does not work. (anglebug.com/3264)
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsOpenGLES());
 
     constexpr int kStartIndex  = 5;
     constexpr int kArrayLength = 5;
@@ -1563,7 +1565,7 @@ TEST_P(GLSLTest, MaxVaryingVec3AndOneFloat)
 // Only fails on D3D9 because of packing limitations.
 TEST_P(GLSLTest, MaxVaryingVec3ArrayAndOneFloatArray)
 {
-    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    // TODO(anglebug.com/5360): Failing on ARM-based Apple DTKs.
     ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsMetal());
 
     GLint maxVaryings = 0;
@@ -1601,7 +1603,7 @@ TEST_P(GLSLTest, MaxVaryingVec2Arrays)
     // (http://anglebug.com/1291)
     ANGLE_SKIP_TEST_IF(IsOSX() && IsAMD() && IsOpenGL());
 
-    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    // TODO(anglebug.com/5360): Failing on ARM-based Apple DTKs.
     ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsMetal());
 
     GLint maxVaryings = 0;
@@ -2111,9 +2113,6 @@ void main()
 // can actually be used.
 TEST_P(GLSLTest, VerifyMaxVertexUniformVectors)
 {
-    // Times out on D3D11 on test infra. http://anglebug.com/5076
-    ANGLE_SKIP_TEST_IF(IsD3D11() && IsIntel());
-
     // crbug.com/680631
     ANGLE_SKIP_TEST_IF(IsOzone() && IsIntel());
 
@@ -2331,6 +2330,26 @@ TEST_P(GLSLTest, ArrayOfStructContainingArrayOfSamplers)
     }
     drawQuad(program.get(), essl1_shaders::PositionAttrib(), 0.5f);
     EXPECT_PIXEL_COLOR_EQ(0, 0, expected);
+}
+
+// Test that if a non-preprocessor token is seen in a disabled if-block then it does not disallow
+// extension pragmas later
+TEST_P(GLSLTest, NonPreprocessorTokensInIfBlocks)
+{
+    constexpr const char *kFS = R"(
+#if __VERSION__ >= 300
+    inout mediump vec4 fragData;
+#else
+    #extension GL_EXT_shader_texture_lod :enable
+#endif
+
+void main()
+{
+}
+    )";
+
+    GLuint shader = CompileShader(GL_FRAGMENT_SHADER, kFS);
+    EXPECT_NE(0u, shader);
 }
 
 // Test that two constructors which have vec4 and mat2 parameters get disambiguated (issue in
@@ -2858,6 +2877,9 @@ TEST_P(GLSLTest, VaryingMatrixArray)
 // Test that using a centroid varying matrix array is supported.
 TEST_P(GLSLTest_ES3, CentroidVaryingMatrixArray)
 {
+    // TODO(anglebug.com/5491): Skipping initial failures so we can set up a passing iOS test bot.
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
+
     constexpr char kVS[] =
         "#version 300 es\n"
         "uniform vec2 u_a1;\n"
@@ -4862,7 +4884,7 @@ TEST_P(GLSLTest, StructsWithSameMembersDisambiguatedByName)
 TEST_P(GLSLTest, InactiveVaryingInVertexActiveInFragment)
 {
     // http://anglebug.com/4820
-    ANGLE_SKIP_TEST_IF(IsOSX() && IsOpenGL());
+    ANGLE_SKIP_TEST_IF((IsOSX() && IsOpenGL()) || (IsIOS() && IsOpenGLES()));
 
     constexpr char kVS[] =
         "attribute vec4 inputAttribute;\n"
@@ -4996,6 +5018,9 @@ TEST_P(WebGL2GLSLTest, VaryingStructNotInitializedInVertexShader)
     //
     // http://anglebug.com/3413
     ANGLE_SKIP_TEST_IF(IsDesktopOpenGL() && (IsOSX() || (IsWindows() && !IsNVIDIA())));
+    // TODO(anglebug.com/5491): iOS thinks that the precision qualifiers don't match on the
+    // struct member. Not sure if it's being overly strict.
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
 
     constexpr char kVS[] =
         "#version 300 es\n"
@@ -5027,6 +5052,9 @@ TEST_P(WebGL2GLSLTest, VaryingStructNotInitializedInVertexShader)
 // Test that a varying struct that gets used in the fragment shader works.
 TEST_P(GLSLTest_ES3, VaryingStructUsedInFragmentShader)
 {
+    // TODO(anglebug.com/5491): iOS thinks that the precision qualifiers don't match on the
+    // struct member. Not sure if it's being overly strict.
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
     constexpr char kVS[] =
         "#version 300 es\n"
         "in vec4 inputAttribute;\n"
@@ -5061,6 +5089,84 @@ TEST_P(GLSLTest_ES3, VaryingStructUsedInFragmentShader)
     EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::green);
 }
 
+// This is a regression test to make sure a red quad is rendered without issues
+// when a passthrough function with a vec3 input parameter is used in the fragment shader.
+TEST_P(GLSLTest_ES31, SamplerPassthroughFailedLink)
+{
+    constexpr char kVS[] =
+        "precision mediump float;\n"
+        "attribute vec4 inputAttribute;\n"
+        "varying mediump vec2 texCoord;\n"
+        "void main() {\n"
+        "    texCoord = inputAttribute.xy;\n"
+        "    gl_Position = vec4(inputAttribute.x, inputAttribute.y, 0.0, 1.0);\n"
+        "}\n";
+
+    constexpr char kFS[] =
+        "precision mediump float;\n"
+        "varying mediump vec2 texCoord;\n"
+        "uniform sampler2D testSampler;\n"
+        "vec3 passthrough(vec3 c) {\n"
+        "    return c;\n"
+        "}\n"
+        "void main() {\n"
+        "    gl_FragColor = vec4(passthrough(texture2D(testSampler, texCoord).rgb), 1.0);\n"
+        "}\n";
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
+
+    // Initialize basic red texture.
+    GLTexture texture;
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 GLColor::red.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    ASSERT_GL_NO_ERROR();
+
+    drawQuad(program.get(), "inputAttribute", 0.5f);
+    ASSERT_GL_NO_ERROR();
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::red);
+}
+
+// This is a regression test to make sure a red quad is rendered without issues
+// when a passthrough function with a vec4 input parameter is used in the fragment shader.
+TEST_P(GLSLTest_ES31, SamplerPassthroughIncorrectColor)
+{
+    constexpr char kVS[] =
+        "precision mediump float;\n"
+        "attribute vec4 inputAttribute;\n"
+        "varying mediump vec2 texCoord;\n"
+        "void main() {\n"
+        "    texCoord = inputAttribute.xy;\n"
+        "    gl_Position = vec4(inputAttribute.x, inputAttribute.y, 0.0, 1.0);\n"
+        "}\n";
+
+    constexpr char kFS[] =
+        "precision mediump float;\n"
+        "varying mediump vec2 texCoord;\n"
+        "uniform sampler2D testSampler;\n"
+        "vec4 passthrough(vec4 c) {\n"
+        "    return c;\n"
+        "}\n"
+        "void main() {\n"
+        "    gl_FragColor = vec4(passthrough(texture2D(testSampler, texCoord)));\n"
+        "}\n";
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
+
+    // Initialize basic red texture.
+    GLTexture texture;
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 GLColor::red.data());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    ASSERT_GL_NO_ERROR();
+
+    drawQuad(program.get(), "inputAttribute", 0.5f);
+    ASSERT_GL_NO_ERROR();
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::red);
+}
+
 // Test that multiple multi-field varying structs that get used in the fragment shader work.
 TEST_P(GLSLTest_ES3, ComplexVaryingStructsUsedInFragmentShader)
 {
@@ -5070,6 +5176,9 @@ TEST_P(GLSLTest_ES3, ComplexVaryingStructsUsedInFragmentShader)
     //
     // http://anglebug.com/3220
     ANGLE_SKIP_TEST_IF(IsVulkan() && IsAndroid());
+    // TODO(anglebug.com/5491): iOS thinks that the precision qualifiers don't match on the
+    // struct members. Not sure if it's being overly strict.
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
 
     constexpr char kVS[] =
         "#version 300 es\n"
@@ -5219,7 +5328,7 @@ TEST_P(GLSLTest_ES3, VaryingMatrices)
 TEST_P(GLSLTest, StructsWithSamplersAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsAdreno() && IsOpenGLES());
 
     const char kFragmentShader[] = R"(precision mediump float;
 struct S { sampler2D samplerMember; };
@@ -5311,7 +5420,7 @@ void main()
 TEST_P(GLSLTest, ArrayOfStructsWithSamplersAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsAdreno() && IsOpenGLES());
 
     constexpr char kFS[] =
         "precision mediump float;\n"
@@ -5362,7 +5471,7 @@ TEST_P(GLSLTest, ArrayOfStructsWithSamplersAsFunctionArg)
 TEST_P(GLSLTest, StructWithSamplerArrayAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsAdreno() && IsOpenGLES());
 
     // TODO(jmadill): Fix on Android/vulkan if possible. http://anglebug.com/2703
     ANGLE_SKIP_TEST_IF(IsAndroid() && IsVulkan());
@@ -5416,9 +5525,9 @@ TEST_P(GLSLTest, StructWithSamplerArrayAsFunctionArg)
 TEST_P(GLSLTest, NestedStructsWithSamplersAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsAdreno() && IsOpenGLES());
 
-    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    // TODO(anglebug.com/5360): Failing on ARM-based Apple DTKs.
     ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
 
     const char kFragmentShader[] = R"(precision mediump float;
@@ -5470,7 +5579,7 @@ void main()
 TEST_P(GLSLTest, CompoundStructsWithSamplersAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsAdreno() && IsOpenGLES());
 
     const char kFragmentShader[] = R"(precision mediump float;
 struct S { sampler2D samplerMember; bool b; };
@@ -5522,9 +5631,9 @@ void main()
 TEST_P(GLSLTest, NestedCompoundStructsWithSamplersAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsAdreno() && IsOpenGLES());
 
-    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    // TODO(anglebug.com/5360): Failing on ARM-based Apple DTKs.
     ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
 
     const char kFragmentShader[] = R"(precision mediump float;
@@ -5590,9 +5699,9 @@ void main()
 TEST_P(GLSLTest, MoreNestedCompoundStructsWithSamplersAsFunctionArg)
 {
     // Shader failed to compile on Nexus devices. http://anglebug.com/2114
-    ANGLE_SKIP_TEST_IF((IsNexus5X() || IsNexus6P()) && IsAdreno() && IsOpenGLES());
+    ANGLE_SKIP_TEST_IF(IsNexus5X() && IsAdreno() && IsOpenGLES());
 
-    // TODO(crbug.com/1132295): Failing on Apple DTK.
+    // TODO(anglebug.com/5360): Failing on ARM-based Apple DTKs.
     ANGLE_SKIP_TEST_IF(IsOSX() && IsARM64() && IsDesktopOpenGL());
 
     const char kFragmentShader[] = R"(precision mediump float;
@@ -6124,6 +6233,9 @@ void main()
 // Test that a varying struct that's defined as a part of the declaration is handled correctly.
 TEST_P(GLSLTest_ES3, VaryingStructWithInlineDefinition)
 {
+    // TODO(anglebug.com/5491): iOS thinks that the precision qualifiers don't match on the
+    // struct member. Not sure if it's being overly strict.
+    ANGLE_SKIP_TEST_IF(IsIOS() && IsOpenGLES());
     constexpr char kVS[] = R"(#version 300 es
 in vec4 inputAttribute;
 
@@ -7088,10 +7200,6 @@ void main()
 // Tests that PointCoord behaves the same betweeen a user FBO and the back buffer.
 TEST_P(GLSLTest, PointCoordConsistency)
 {
-    // On Intel Windows OpenGL drivers PointCoord appears to be flipped when drawing to the
-    // default framebuffer. http://anglebug.com/2805
-    ANGLE_SKIP_TEST_IF(IsIntel() && IsWindows() && IsOpenGL());
-
     // AMD's OpenGL drivers may have the same issue. http://anglebug.com/1643
     ANGLE_SKIP_TEST_IF(IsAMD() && IsWindows() && IsOpenGL());
     // http://anglebug.com/4092
@@ -8421,6 +8529,8 @@ TEST_P(GLSLTest_ES31, MixedRowAndColumnMajorMatrices_WriteSideEffect)
 
     // Fails on windows AMD on GL: http://anglebug.com/3838
     ANGLE_SKIP_TEST_IF(IsWindows() && IsOpenGL() && IsAMD());
+    // http://anglebug.com/5384
+    ANGLE_SKIP_TEST_IF(IsLinux() && IsAMD() && IsDesktopOpenGL());
 
     // Fails on D3D due to mistranslation: http://anglebug.com/3841
     ANGLE_SKIP_TEST_IF(IsD3D11());
@@ -8503,6 +8613,8 @@ TEST_P(GLSLTest_ES31, MixedRowAndColumnMajorMatrices_WriteArrayOfArray)
 {
     // Fails on windows AMD on GL: http://anglebug.com/3838
     ANGLE_SKIP_TEST_IF(IsWindows() && IsOpenGL() && IsAMD());
+    // http://anglebug.com/5384
+    ANGLE_SKIP_TEST_IF(IsLinux() && IsAMD() && IsDesktopOpenGL());
 
     // Fails on D3D due to mistranslation: http://anglebug.com/3841
     ANGLE_SKIP_TEST_IF(IsD3D11());
@@ -8696,6 +8808,32 @@ void main() {
     EXPECT_NE(0u, program);
 }
 
+// Test that reusing the same uniform variable name for different uses across stages links fine.
+TEST_P(GLSLTest_ES31, UniformVariableNameReuseAcrossStages)
+{
+    constexpr char kVS[] = R"(#version 310 es
+precision mediump float;
+in highp vec4 variableWithSameName;
+
+void main() {
+    gl_Position = variableWithSameName;
+}
+)";
+
+    constexpr char kFS[] = R"(#version 310 es
+precision mediump float;
+uniform vec4 variableWithSameName;
+out vec4 col;
+
+void main() {
+    col = vec4(variableWithSameName);
+}
+)";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_NE(0u, program);
+}
+
 // Verify that precision match validation of uniforms is performed only if they are statically used
 TEST_P(GLSLTest_ES31, UniformPrecisionMatchValidation)
 {
@@ -8752,6 +8890,617 @@ void main()
     EXPECT_NE(0u, program);
 
     program = CompileProgram(kVSStaticUse, kFSStaticUse);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails when two instanceless interface blocks with different block names but
+// same field names are present.
+TEST_P(GLSLTest_ES31, AmbiguousInstancelessInterfaceBlockFields)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+in highp vec4 position;
+layout(binding = 0) buffer BlockA { mediump float a; };
+void main()
+{
+    a = 0.0;
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+uniform BlockB { float a; };
+void main()
+{
+    color = vec4(a, a, a, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Verify I/O block array locations
+TEST_P(GLSLTest_ES31, IOBlockLocations)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_geometry_shader"));
+
+    // http://anglebug.com/5444
+    ANGLE_SKIP_TEST_IF(IsIntel() && IsOpenGL() && IsWindows());
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+
+in highp vec4 position;
+
+layout(location = 0) out vec4 aOut;
+
+layout(location = 6) out VSBlock
+{
+    vec4 b;     // location 6
+    vec4 c;     // location 7
+    layout(location = 1) vec4 d;
+    vec4 e;     // location 2
+    vec4 f[2];  // locations 3 and 4
+} blockOut;
+
+layout(location = 5) out vec4 gOut;
+
+void main()
+{
+    aOut = vec4(0.03, 0.06, 0.09, 0.12);
+    blockOut.b = vec4(0.15, 0.18, 0.21, 0.24);
+    blockOut.c = vec4(0.27, 0.30, 0.33, 0.36);
+    blockOut.d = vec4(0.39, 0.42, 0.45, 0.48);
+    blockOut.e = vec4(0.51, 0.54, 0.57, 0.6);
+    blockOut.f[0] = vec4(0.63, 0.66, 0.66, 0.69);
+    blockOut.f[1] = vec4(0.72, 0.75, 0.78, 0.81);
+    gOut = vec4(0.84, 0.87, 0.9, 0.93);
+    gl_Position = position;
+})";
+
+    constexpr char kGS[] = R"(#version 310 es
+#extension GL_EXT_geometry_shader : require
+layout (triangles) in;
+layout (triangle_strip, max_vertices = 3) out;
+
+// Input varyings
+layout(location = 0) in vec4 aIn[];
+
+layout(location = 6) in VSBlock
+{
+    vec4 b;
+    vec4 c;
+    layout(location = 1) vec4 d;
+    vec4 e;
+    vec4 f[2];
+} blockIn[];
+
+layout(location = 5) in vec4 gIn[];
+
+// Output varyings
+layout(location = 1) out vec4 aOut;
+
+layout(location = 0) out GSBlock
+{
+    vec4 b;     // location 0
+    layout(location = 3) vec4 c;
+    layout(location = 7) vec4 d;
+    layout(location = 5) vec4 e[2];
+    layout(location = 4) vec4 f;
+} blockOut;
+
+layout(location = 2) out vec4 gOut;
+
+void main()
+{
+    int n;
+    for (n = 0; n < gl_in.length(); n++)
+    {
+        gl_Position = gl_in[n].gl_Position;
+
+        aOut = aIn[n];
+        blockOut.b = blockIn[n].b;
+        blockOut.c = blockIn[n].c;
+        blockOut.d = blockIn[n].d;
+        blockOut.e[0] = blockIn[n].e;
+        blockOut.e[1] = blockIn[n].f[0];
+        blockOut.f = blockIn[n].f[1];
+        gOut = gIn[n];
+
+        EmitVertex();
+    }
+    EndPrimitive();
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+
+layout(location = 0) out mediump vec4 color;
+
+layout(location = 1) in vec4 aIn;
+
+layout(location = 0) in GSBlock
+{
+    vec4 b;
+    layout(location = 3) vec4 c;
+    layout(location = 7) vec4 d;
+    layout(location = 5) vec4 e[2];
+    layout(location = 4) vec4 f;
+} blockIn;
+
+layout(location = 2) in vec4 gIn;
+
+bool isEq(vec4 a, vec4 b) { return all(lessThan(abs(a-b), vec4(0.001))); }
+
+void main()
+{
+    bool passR = isEq(aIn, vec4(0.03, 0.06, 0.09, 0.12));
+    bool passG = isEq(blockIn.b, vec4(0.15, 0.18, 0.21, 0.24)) &&
+                 isEq(blockIn.c, vec4(0.27, 0.30, 0.33, 0.36)) &&
+                 isEq(blockIn.d, vec4(0.39, 0.42, 0.45, 0.48)) &&
+                 isEq(blockIn.e[0], vec4(0.51, 0.54, 0.57, 0.6)) &&
+                 isEq(blockIn.e[1], vec4(0.63, 0.66, 0.66, 0.69)) &&
+                 isEq(blockIn.f, vec4(0.72, 0.75, 0.78, 0.81));
+    bool passB = isEq(gIn, vec4(0.84, 0.87, 0.9, 0.93));
+
+    color = vec4(passR, passG, passB, 1.0);
+})";
+
+    ANGLE_GL_PROGRAM_WITH_GS(program, kVS, kGS, kFS);
+    EXPECT_GL_NO_ERROR();
+
+    GLTexture color;
+    glBindTexture(GL_TEXTURE_2D, color);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 1, 1);
+
+    GLFramebuffer fbo;
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
+
+    drawQuad(program, "position", 0);
+
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::white);
+}
+
+// Test varying packing in presence of multiple I/O blocks
+TEST_P(GLSLTest_ES31, MultipleIOBlocks)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+
+in highp vec4 position;
+
+out VSBlock1
+{
+    vec4 a;
+    vec4 b[2];
+} blockOut1;
+
+out VSBlock2
+{
+    vec4 c[2];
+    vec4 d;
+} blockOut2;
+
+void main()
+{
+    blockOut1.a = vec4(0.15, 0.18, 0.21, 0.24);
+    blockOut1.b[0] = vec4(0.27, 0.30, 0.33, 0.36);
+    blockOut1.b[1] = vec4(0.39, 0.42, 0.45, 0.48);
+    blockOut2.c[0] = vec4(0.51, 0.54, 0.57, 0.6);
+    blockOut2.c[1] = vec4(0.63, 0.66, 0.66, 0.69);
+    blockOut2.d = vec4(0.72, 0.75, 0.78, 0.81);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+
+layout(location = 0) out mediump vec4 color;
+
+in VSBlock1
+{
+    vec4 a;
+    vec4 b[2];
+} blockIn1;
+
+in VSBlock2
+{
+    vec4 c[2];
+    vec4 d;
+} blockIn2;
+
+bool isEq(vec4 a, vec4 b) { return all(lessThan(abs(a-b), vec4(0.001))); }
+
+void main()
+{
+    bool passR = isEq(blockIn1.a, vec4(0.15, 0.18, 0.21, 0.24));
+    bool passG = isEq(blockIn1.b[0], vec4(0.27, 0.30, 0.33, 0.36)) &&
+                 isEq(blockIn1.b[1], vec4(0.39, 0.42, 0.45, 0.48));
+    bool passB = isEq(blockIn2.c[0], vec4(0.51, 0.54, 0.57, 0.6)) &&
+                 isEq(blockIn2.c[1], vec4(0.63, 0.66, 0.66, 0.69));
+    bool passA = isEq(blockIn2.d, vec4(0.72, 0.75, 0.78, 0.81));
+
+    color = vec4(passR, passG, passB, passA);
+})";
+
+    ANGLE_GL_PROGRAM(program, kVS, kFS);
+    EXPECT_GL_NO_ERROR();
+
+    GLTexture color;
+    glBindTexture(GL_TEXTURE_2D, color);
+    glTexStorage2D(GL_TEXTURE_2D, 1, GL_RGBA8, 1, 1);
+
+    GLFramebuffer fbo;
+    glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, color, 0);
+
+    drawQuad(program, "position", 0);
+
+    EXPECT_PIXEL_COLOR_EQ(0, 0, GLColor::white);
+}
+
+// Validate that link fails with I/O block member name mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberNameMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+out VSBlock { vec4 a; vec4 b[2]; } blockOut1;
+void main()
+{
+    blockOut1.a = vec4(0);
+    blockOut1.b[0] = vec4(0);
+    blockOut1.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+in VSBlock { vec4 c; vec4 b[2]; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.c.x, blockIn1.b[0].y, blockIn1.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member array size mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberArraySizeMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+out VSBlock { vec4 a; vec4 b[2]; } blockOut1;
+void main()
+{
+    blockOut1.a = vec4(0);
+    blockOut1.b[0] = vec4(0);
+    blockOut1.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+in VSBlock { vec4 a; vec4 b[3]; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.a.x, blockIn1.b[0].y, blockIn1.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member type mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberTypeMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+out VSBlock { vec4 a; vec4 b[2]; } blockOut1;
+void main()
+{
+    blockOut1.a = vec4(0);
+    blockOut1.b[0] = vec4(0);
+    blockOut1.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+in VSBlock { vec3 a; vec4 b[2]; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.a.x, blockIn1.b[0].y, blockIn1.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block location mismatches
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkLocationMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+layout(location = 2) out VSBlock { vec4 a; vec4 b[2]; } blockOut1;
+void main()
+{
+    blockOut1.a = vec4(0);
+    blockOut1.b[0] = vec4(0);
+    blockOut1.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+layout(location = 1) in VSBlock { vec4 a; vec4 b[2]; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.a.x, blockIn1.b[0].y, blockIn1.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member location mismatches
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberLocationMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+out VSBlock { vec4 a; layout(location = 2) vec4 b[2]; } blockOut1;
+void main()
+{
+    blockOut1.a = vec4(0);
+    blockOut1.b[0] = vec4(0);
+    blockOut1.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+in VSBlock { vec4 a; layout(location = 3) vec4 b[2]; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.a.x, blockIn1.b[0].y, blockIn1.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member struct name mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberStructNameMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+struct S1 { vec4 a; vec4 b[2]; };
+out VSBlock { S1 s; } blockOut1;
+void main()
+{
+    blockOut1.s.a = vec4(0);
+    blockOut1.s.b[0] = vec4(0);
+    blockOut1.s.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+struct S2 { vec4 a; vec4 b[2]; };
+in VSBlock { S2 s; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.s.a.x, blockIn1.s.b[0].y, blockIn1.s.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member struct member name mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberStructMemberNameMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+struct S { vec4 c; vec4 b[2]; };
+out VSBlock { S s; } blockOut1;
+void main()
+{
+    blockOut1.s.c = vec4(0);
+    blockOut1.s.b[0] = vec4(0);
+    blockOut1.s.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+struct S { vec4 a; vec4 b[2]; };
+in VSBlock { S s; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.s.a.x, blockIn1.s.b[0].y, blockIn1.s.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member struct member type mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberStructMemberTypeMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+struct S { vec4 a; vec4 b[2]; };
+out VSBlock { S s; } blockOut1;
+void main()
+{
+    blockOut1.s.a = vec4(0);
+    blockOut1.s.b[0] = vec4(0);
+    blockOut1.s.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+struct S { vec3 a; vec4 b[2]; };
+in VSBlock { S s; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.s.a.x, blockIn1.s.b[0].y, blockIn1.s.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member struct member array size mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberStructMemberArraySizeMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+struct S { vec4 a; vec4 b[3]; };
+out VSBlock { S s; } blockOut1;
+void main()
+{
+    blockOut1.s.a = vec4(0);
+    blockOut1.s.b[0] = vec4(0);
+    blockOut1.s.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+struct S { vec4 a; vec4 b[2]; };
+in VSBlock { S s; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.s.a.x, blockIn1.s.b[0].y, blockIn1.s.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member struct member count mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberStructMemberCountMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+struct S { vec4 a; vec4 b[2]; vec4 c; };
+out VSBlock { S s; } blockOut1;
+void main()
+{
+    blockOut1.s.c = vec4(0);
+    blockOut1.s.b[0] = vec4(0);
+    blockOut1.s.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+struct S { vec4 a; vec4 b[2]; };
+in VSBlock { S s; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.s.a.x, blockIn1.s.b[0].y, blockIn1.s.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
+    EXPECT_EQ(0u, program);
+}
+
+// Validate that link fails with I/O block member nested struct mismatches.
+TEST_P(GLSLTest_ES31, NegativeIOBlocksLinkMemberNestedStructMismatch)
+{
+    ANGLE_SKIP_TEST_IF(!IsGLExtensionEnabled("GL_EXT_shader_io_blocks"));
+
+    constexpr char kVS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+in highp vec4 position;
+struct S1 { vec4 c; vec4 b[2]; };
+struct S2 { S1 s; };
+struct S3 { S2 s; };
+out VSBlock { S3 s; } blockOut1;
+void main()
+{
+    blockOut1.s.s.s.c = vec4(0);
+    blockOut1.s.s.s.b[0] = vec4(0);
+    blockOut1.s.s.s.b[1] = vec4(0);
+    gl_Position = position;
+})";
+
+    constexpr char kFS[] = R"(#version 310 es
+#extension GL_EXT_shader_io_blocks : require
+precision mediump float;
+layout(location = 0) out mediump vec4 color;
+struct S1 { vec4 a; vec4 b[2]; };
+struct S2 { S1 s; };
+struct S3 { S2 s; };
+in VSBlock { S3 s; } blockIn1;
+void main()
+{
+    color = vec4(blockIn1.s.s.s.a.x, blockIn1.s.s.s.b[0].y, blockIn1.s.s.s.b[1].z, 1.0);
+})";
+
+    GLuint program = CompileProgram(kVS, kFS);
     EXPECT_EQ(0u, program);
 }
 }  // anonymous namespace

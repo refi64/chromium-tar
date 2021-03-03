@@ -79,7 +79,7 @@ class TextureCapsMap final : angle::NonCopyable
     TextureCaps &get(angle::FormatID formatID);
 
     // Indexed by angle::FormatID
-    std::array<TextureCaps, angle::kNumANGLEFormats> mFormatData;
+    angle::FormatMap<TextureCaps> mFormatData;
 };
 
 void InitMinimumTextureCapsMap(const Version &clientVersion,
@@ -345,7 +345,11 @@ struct Extensions
     bool blendMinMax = false;
 
     // GL_ANGLE_framebuffer_blit
-    bool framebufferBlit = false;
+    bool framebufferBlitANGLE = false;
+    // GL_NV_framebuffer_blit
+    bool framebufferBlitNV = false;
+    // Any version of the framebuffer_blit extension
+    bool framebufferBlitAny() const { return (framebufferBlitANGLE || framebufferBlitNV); }
 
     // GL_ANGLE_framebuffer_multisample
     bool framebufferMultisample = false;
@@ -372,6 +376,9 @@ struct Extensions
     // GL_EXT_shader_texture_lod
     bool shaderTextureLOD = false;
 
+    // GL_EXT_shader_framebuffer_fetch_non_coherent
+    bool shaderFramebufferFetchNonCoherentEXT = false;
+
     // GL_EXT_frag_depth
     bool fragDepth = false;
 
@@ -396,6 +403,9 @@ struct Extensions
 
     // EXT_debug_marker
     bool debugMarker = false;
+
+    // EXT_debug_label
+    bool debugLabel = false;
 
     // GL_OES_EGL_image
     bool eglImageOES = false;
@@ -562,6 +572,9 @@ struct Extensions
     // GL_OES_draw_texture
     bool drawTextureOES = false;
 
+    // GL_OES_framebuffer_object
+    bool framebufferObjectOES = false;
+
     // EGL_ANGLE_explicit_context GL subextensions
     // GL_ANGLE_explicit_context_gles1
     bool explicitContextGles1 = false;
@@ -570,6 +583,9 @@ struct Extensions
 
     // GL_KHR_parallel_shader_compile
     bool parallelShaderCompile = false;
+
+    // GL_EXT_separate_shader_objects
+    bool separateShaderObjects = false;
 
     // GL_OES_texture_storage_multisample_2d_array
     bool textureStorageMultisample2DArrayOES = false;
@@ -624,6 +640,13 @@ struct Extensions
     // GL_EXT_shader_non_constant_global_initializers
     bool shaderNonConstGlobalInitializersEXT = false;
 
+    // GL_OES_shader_io_blocks
+    bool shaderIoBlocksOES = false;
+    // GL_EXT_shader_io_blocks
+    bool shaderIoBlocksEXT = false;
+    // Any version of shader io block extension
+    bool shaderIoBlocksAny() const { return (shaderIoBlocksOES || shaderIoBlocksEXT); }
+
     // GL_EXT_gpu_shader5
     bool gpuShader5EXT = false;
     // WEBGL_video_texture
@@ -663,6 +686,9 @@ struct Extensions
     // GL_OES_shader_image_atomic
     bool shaderImageAtomicOES = false;
 
+    // GL_OES_sample_variables
+    bool sampleVariablesOES = false;
+
     // GL_NV_robustness_video_memory_purge
     bool robustnessVideoMemoryPurgeNV = false;
 
@@ -678,6 +704,9 @@ struct Extensions
     bool textureBufferEXT = false;
     // Any version of the texture buffer extension
     bool textureBufferAny() const { return (textureBufferOES || textureBufferEXT); }
+
+    // GL_EXT_YUV_target
+    bool yuvTargetEXT = false;
 };
 
 // Pointer to a boolean memeber of the Extensions struct
@@ -980,9 +1009,6 @@ struct DisplayExtensions
     // EGL_KHR_create_context
     bool createContext = false;
 
-    // EGL_EXT_device_query
-    bool deviceQuery = false;
-
     // EGL_KHR_image
     bool image = false;
 
@@ -1257,6 +1283,9 @@ struct ClientExtensions
 
     // EGL_ANGLE_platform_angle_device_type_egl_angle
     bool platformANGLEDeviceTypeEGLANGLE = false;
+
+    // EGL_EXT_device_query
+    bool deviceQueryEXT = false;
 };
 
 }  // namespace egl

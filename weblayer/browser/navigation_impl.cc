@@ -11,6 +11,7 @@
 #include "net/http/http_util.h"
 #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
 #include "third_party/blink/public/mojom/loader/referrer.mojom.h"
+#include "weblayer/browser/navigation_ui_data_impl.h"
 
 #if defined(OS_ANDROID)
 #include "base/android/jni_array.h"
@@ -101,6 +102,16 @@ jboolean NavigationImpl::DisableNetworkErrorAutoReload(JNIEnv* env) {
   return true;
 }
 
+jboolean NavigationImpl::AreIntentLaunchesAllowedInBackground(JNIEnv* env) {
+  NavigationUIDataImpl* navigation_ui_data = static_cast<NavigationUIDataImpl*>(
+      navigation_handle_->GetNavigationUIData());
+
+  if (!navigation_ui_data)
+    return false;
+
+  return navigation_ui_data->are_intent_launches_allowed_in_background();
+}
+
 void NavigationImpl::SetResponse(
     std::unique_ptr<embedder_support::WebResourceResponse> response) {
   response_ = std::move(response);
@@ -119,6 +130,10 @@ bool NavigationImpl::IsPageInitiated() {
 
 bool NavigationImpl::IsReload() {
   return navigation_handle_->GetReloadType() != content::ReloadType::NONE;
+}
+
+bool NavigationImpl::IsServedFromBackForwardCache() {
+  return navigation_handle_->IsServedFromBackForwardCache();
 }
 
 GURL NavigationImpl::GetURL() {
@@ -154,6 +169,10 @@ bool NavigationImpl::IsErrorPage() {
 
 bool NavigationImpl::IsDownload() {
   return navigation_handle_->IsDownload();
+}
+
+bool NavigationImpl::IsKnownProtocol() {
+  return !navigation_handle_->IsExternalProtocol();
 }
 
 bool NavigationImpl::WasStopCalled() {

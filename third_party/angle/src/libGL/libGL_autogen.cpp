@@ -5,29 +5,14 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
-// libGL.cpp: Implements the exported Windows GL functions.
+// libGL_autogen.cpp: Implements the exported Windows GL functions.
 
 #include "angle_gl.h"
 
-#include "libGL/entry_points_gl_1_0_autogen.h"
-#include "libGL/entry_points_gl_1_1_autogen.h"
-#include "libGL/entry_points_gl_1_2_autogen.h"
-#include "libGL/entry_points_gl_1_3_autogen.h"
-#include "libGL/entry_points_gl_1_4_autogen.h"
-#include "libGL/entry_points_gl_1_5_autogen.h"
-#include "libGL/entry_points_gl_2_0_autogen.h"
-#include "libGL/entry_points_gl_2_1_autogen.h"
-#include "libGL/entry_points_gl_3_0_autogen.h"
-#include "libGL/entry_points_gl_3_1_autogen.h"
-#include "libGL/entry_points_gl_3_2_autogen.h"
-#include "libGL/entry_points_gl_3_3_autogen.h"
-#include "libGL/entry_points_gl_4_0_autogen.h"
-#include "libGL/entry_points_gl_4_1_autogen.h"
-#include "libGL/entry_points_gl_4_2_autogen.h"
-#include "libGL/entry_points_gl_4_3_autogen.h"
-#include "libGL/entry_points_gl_4_4_autogen.h"
-#include "libGL/entry_points_gl_4_5_autogen.h"
-#include "libGL/entry_points_gl_4_6_autogen.h"
+#include "libGL/entry_points_gl_1_autogen.h"
+#include "libGL/entry_points_gl_2_autogen.h"
+#include "libGL/entry_points_gl_3_autogen.h"
+#include "libGL/entry_points_gl_4_autogen.h"
 
 #include "common/event_tracer.h"
 

@@ -551,6 +551,8 @@ bool IsVaryingOut(TQualifier qualifier)
         case EvqCentroidOut:
         case EvqVertexOut:
         case EvqGeometryOut:
+        case EvqTessControlOut:
+        case EvqTessEvaluationOut:
         case EvqSampleOut:
             return true;
 
@@ -572,6 +574,8 @@ bool IsVaryingIn(TQualifier qualifier)
         case EvqCentroidIn:
         case EvqFragmentIn:
         case EvqGeometryIn:
+        case EvqTessControlIn:
+        case EvqTessEvaluationIn:
         case EvqSampleIn:
             return true;
 
@@ -627,6 +631,24 @@ InterpolationType GetInterpolationType(TQualifier qualifier)
 #if !UNREACHABLE_IS_NORETURN
             return INTERPOLATION_SMOOTH;
 #endif
+    }
+}
+
+// a field may not have qualifer without in or out.
+InterpolationType GetFieldInterpolationType(TQualifier qualifier)
+{
+    switch (qualifier)
+    {
+        case EvqFlat:
+            return INTERPOLATION_FLAT;
+        case EvqNoPerspective:
+            return INTERPOLATION_NOPERSPECTIVE;
+        case EvqSmooth:
+            return INTERPOLATION_SMOOTH;
+        case EvqCentroid:
+            return INTERPOLATION_CENTROID;
+        default:
+            return GetInterpolationType(qualifier);
     }
 }
 
