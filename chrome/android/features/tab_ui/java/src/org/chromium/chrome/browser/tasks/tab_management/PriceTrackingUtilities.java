@@ -8,8 +8,10 @@ import androidx.annotation.VisibleForTesting;
 
 import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
 import org.chromium.chrome.browser.preferences.SharedPreferencesManager;
+import org.chromium.chrome.browser.price_tracking.PriceDropNotificationManager;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.signin.services.IdentityServicesProvider;
+import org.chromium.chrome.browser.signin.services.UnifiedConsentServiceBridge;
 import org.chromium.chrome.browser.sync.ProfileSyncService;
 import org.chromium.components.sync.ModelType;
 
@@ -23,14 +25,18 @@ public class PriceTrackingUtilities {
     @VisibleForTesting
     public static final String TRACK_PRICES_ON_TABS =
             ChromePreferenceKeys.PRICE_TRACKING_TRACK_PRICES_ON_TABS;
-    private static final String PRICE_DROP_ALERTS =
-            ChromePreferenceKeys.PRICE_TRACKING_PRICE_DROP_ALERTS;
     @VisibleForTesting
     public static final String PRICE_WELCOME_MESSAGE_CARD =
             ChromePreferenceKeys.PRICE_TRACKING_PRICE_WELCOME_MESSAGE_CARD;
     @VisibleForTesting
     public static final String PRICE_WELCOME_MESSAGE_CARD_SHOW_COUNT =
             ChromePreferenceKeys.PRICE_TRACKING_PRICE_WELCOME_MESSAGE_CARD_SHOW_COUNT;
+    @VisibleForTesting
+    public static final String PRICE_ALERTS_MESSAGE_CARD =
+            ChromePreferenceKeys.PRICE_TRACKING_PRICE_ALERTS_MESSAGE_CARD;
+    @VisibleForTesting
+    public static final String PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT =
+            ChromePreferenceKeys.PRICE_TRACKING_PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT;
 
     @VisibleForTesting
     public static final SharedPreferencesManager SHARED_PREFERENCES_MANAGER =
@@ -49,7 +55,7 @@ public class PriceTrackingUtilities {
                     && sIsSignedInAndSyncEnabledForTesting;
         }
         return TabUiFeatureUtilities.isPriceTrackingEnabled() && isSignedIn()
-                && isOpenTabsSyncEnabled();
+                && isAnonymizedUrlDataCollectionEnabled() && isOpenTabsSyncEnabled();
     }
 
     /**
@@ -71,23 +77,6 @@ public class PriceTrackingUtilities {
     }
 
     /**
-     * Update SharedPreferences when users turn on/off the feature getting price drop alerts.
-     */
-    public static void flipPriceDropAlerts() {
-        final boolean enablePriceDropAlerts =
-                SHARED_PREFERENCES_MANAGER.readBoolean(PRICE_DROP_ALERTS, false);
-        SHARED_PREFERENCES_MANAGER.writeBoolean(PRICE_DROP_ALERTS, !enablePriceDropAlerts);
-    }
-
-    /**
-     * @return Whether the feature getting price drop alerts is turned on by users.
-     */
-    public static boolean isPriceDropAlertsEnabled() {
-        return isPriceTrackingEligible()
-                && SHARED_PREFERENCES_MANAGER.readBoolean(PRICE_DROP_ALERTS, false);
-    }
-
-    /**
      * Forbid showing the PriceWelcomeMessageCard any more.
      */
     public static void disablePriceWelcomeMessageCard() {
@@ -95,11 +84,12 @@ public class PriceTrackingUtilities {
     }
 
     /**
-     * @return Whether the PriceWelcomeMessageCard is disabled by users.
+     * @return Whether the PriceWelcomeMessageCard is enabled.
      */
-    public static boolean isPriceWelcomeMessageCardDisabled() {
-        return !SHARED_PREFERENCES_MANAGER.readBoolean(
-                PRICE_WELCOME_MESSAGE_CARD, TabUiFeatureUtilities.isPriceTrackingEnabled());
+    public static boolean isPriceWelcomeMessageCardEnabled() {
+        return isPriceTrackingEligible()
+                && SHARED_PREFERENCES_MANAGER.readBoolean(
+                        PRICE_WELCOME_MESSAGE_CARD, TabUiFeatureUtilities.isPriceTrackingEnabled());
     }
 
     /**
@@ -117,6 +107,49 @@ public class PriceTrackingUtilities {
         return SHARED_PREFERENCES_MANAGER.readInt(PRICE_WELCOME_MESSAGE_CARD_SHOW_COUNT, 0);
     }
 
+    /**
+     * Forbid showing the PriceAlertsMessageCard any more.
+     */
+    public static void disablePriceAlertsMessageCard() {
+        SHARED_PREFERENCES_MANAGER.writeBoolean(PRICE_ALERTS_MESSAGE_CARD, false);
+    }
+
+    /**
+     * @return Whether the PriceAlertsMessageCard is enabled. We don't show this message card if
+     *         user can already receive price drop notifications, see {@link
+     *         PriceDropNotificationManager#canPostNotification()}.
+     */
+    public static boolean isPriceAlertsMessageCardEnabled() {
+        return isPriceTrackingEligible()
+                && SHARED_PREFERENCES_MANAGER.readBoolean(
+                        PRICE_ALERTS_MESSAGE_CARD, TabUiFeatureUtilities.isPriceTrackingEnabled())
+                && (!(new PriceDropNotificationManager()).canPostNotification());
+    }
+
+    /**
+     * Increase the show count of PriceAlertsMessageCard every time it shows in the tab switcher.
+     */
+    public static void increasePriceAlertsMessageCardShowCount() {
+        SHARED_PREFERENCES_MANAGER.writeInt(
+                PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT, getPriceAlertsMessageCardShowCount() + 1);
+    }
+
+    /**
+     * Decrease the show count of PriceAlertsMessageCard. Right now it is used to correct the show
+     * count when PriceAlertsMessageCard is deprioritized by PriceWelcomeMessageCard.
+     */
+    public static void decreasePriceAlertsMessageCardShowCount() {
+        SHARED_PREFERENCES_MANAGER.writeInt(
+                PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT, getPriceAlertsMessageCardShowCount() - 1);
+    }
+
+    /**
+     * @return The show count of PriceAlertsMessageCard.
+     */
+    public static int getPriceAlertsMessageCardShowCount() {
+        return SHARED_PREFERENCES_MANAGER.readInt(PRICE_ALERTS_MESSAGE_CARD_SHOW_COUNT, 0);
+    }
+
     private static boolean isSignedIn() {
         return IdentityServicesProvider.get()
                 .getIdentityManager(Profile.getLastUsedRegularProfile())
@@ -127,6 +160,11 @@ public class PriceTrackingUtilities {
         ProfileSyncService syncService = ProfileSyncService.get();
         return syncService != null && syncService.isSyncRequested()
                 && syncService.getActiveDataTypes().contains(ModelType.SESSIONS);
+    }
+
+    private static boolean isAnonymizedUrlDataCollectionEnabled() {
+        return UnifiedConsentServiceBridge.isUrlKeyedAnonymizedDataCollectionEnabled(
+                Profile.getLastUsedRegularProfile());
     }
 
     @VisibleForTesting

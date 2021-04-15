@@ -168,17 +168,12 @@
 
 // Not failing in last official run, but failed recently:
 4110 SWIFTSHADER : dEQP-GLES31.functional.shaders.helper_invocation.* = FAIL
-
-// Vulkan Android doesn't support array of array of opaque uniforms. Emulation is not yet done for images
-3881 VULKAN ANDROID : dEQP-GLES31.functional.program_interface_query.uniform.location.default_block.array.array.image_2d = SKIP
-3881 VULKAN ANDROID : dEQP-GLES31.functional.program_interface_query.uniform.location.default_block.array.array.iimage_2d_array = SKIP
+5662 SWIFTSHADER : dEQP-GLES31.functional.copy_image.compressed.* = FAIL
+5662 SWIFTSHADER : dEQP-GLES31.functional.copy_image.mixed.* = FAIL
 
 ////
 //// General Vulkan expectations
 ////
-
-// Tessellation geometry interaction:
-3572 VULKAN : dEQP-GLES31.functional.tessellation_geometry_interaction.* = FAIL
 
 // Cannot create 2D (array) view of 3D texture.
 3886 VULKAN : dEQP-GLES31.functional.image_load_store.3d.*layer = FAIL
@@ -186,8 +181,10 @@
 // Geometry shader support:
 5430 VULKAN : dEQP-GLES31.functional.geometry_shading.query.primitives_generated_* = FAIL
 5452 VULKAN : dEQP-GLES31.functional.geometry_shading.layered.layer_provoking_vertex_* = FAIL
-3571 VULKAN : dEQP-GLES31.functional.geometry_shading.*transform_feedback* = SKIP
-3571 VULKAN : dEQP-GLES31.functional.program_interface_query.transform_feedback_varying.*geo* = SKIP
+
+// Tessellation shader support:
+5557 VULKAN : dEQP-GLES31.functional.tessellation.shader_input_output.barrier = FAIL
+5557 VULKAN : dEQP-GLES31.functional.tessellation.shader_input_output.gl_position_tcs_to_tes = FAIL
 
 ////
 //// AMD Vulkan expectations
@@ -220,24 +217,8 @@
 4110 ANDROID VULKAN : dEQP-GLES31.functional.shaders.helper_invocation.value.points_8_samples = FAIL
 4110 ANDROID VULKAN : dEQP-GLES31.functional.shaders.helper_invocation.value.triangles_max_samples = FAIL
 
-// Passing on recent drivers:
-3726 VULKAN ANDROID : dEQP-GLES31.functional.ssbo.layout.* = FAIL
-3726 VULKAN ANDROID : dEQP-GLES31.functional.synchronization.inter_call.without_memory_barrier.*atomic_counter* = FAIL
-3726 VULKAN ANDROID : dEQP-GLES31.functional.compute.basic.atomic_counter* = FAIL
-
 // Seem to trigger LowMemoryKiller when run in a certain sequence
 5185 VULKAN ANDROID : dEQP-GLES31.functional.atomic_counter.* = SKIP
-
-// Arrays of opaque types as function parameters (possibly related to issue 3882)
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.const_literal_vertex = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.const_literal_fragment = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.const_literal_compute = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.const_expression_vertex = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.const_expression_fragment = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.const_expression_compute = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.*uniform_vertex = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.*uniform_fragment = FAIL
-2703 VULKAN ANDROID : dEQP-GLES31.functional.shaders.opaque_type_indexing.atomic_counter.*uniform_compute = FAIL
 
 // SSBO synchronization:
 4097 VULKAN PIXEL2ORXL : dEQP-GLES31.functional.synchronization.in_invocation.ssbo_alias_overwrite = FAIL
@@ -254,10 +235,6 @@
 
 // Need to support non-color when staging image updates
 4080 ANDROID VULKAN : dEQP-GLES31.functional.stencil_texturing.misc.base_level = SKIP
-
-// Android uses "old" sampler rewrite that doesn't support array of arrays
-2703 VULKAN ANDROID : dEQP-GLES31.functional.program_interface_query.uniform.location.default_block.array.array.*sampler* = SKIP
-2703 VULKAN ANDROID : dEQP-GLES31.functional.uniform_location.nested_array.*sampler2D* = SKIP
 
 // Fail on tests that use an unsupported extension!
 4371 VULKAN ANDROID : dEQP-GLES31.functional.shaders.implicit_conversions.es31.arithmetic.input_before_literal.add.int_to_vec3_vertex = FAIL
@@ -299,9 +276,6 @@
 5276 NVIDIA VULKAN : dEQP-GLES31.functional.copy_image.compressed.viewclass_eac* = FAIL
 5276 NVIDIA VULKAN : dEQP-GLES31.functional.copy_image.compressed.viewclass_etc* = FAIL
 5276 NVIDIA VULKAN : dEQP-GLES31.functional.copy_image.mixed.*eac* = FAIL
-
-// imageAtomicExchange failure with r32f format
-5353 NVIDIA VULKAN : dEQP-GLES31.functional.image_load_store.*.atomic.exchange_r32f* = FAIL
 
 // Vulkan Android failures with these formats
 5277 VULKAN ANDROID : dEQP-GLES31.functional.copy_image.non_compressed.viewclass_32_bits.rgba8_snorm_rgb10_a2* = FAIL

@@ -347,7 +347,7 @@ static InternalFormatInfoMap BuildInternalFormatInfoMap()
     InsertFormatMapping(&map, GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT, ExtAndVersionOrExt("GL_EXT_texture_compression_s3tc", 2, 1, "GL_EXT_texture_sRGB"), AlwaysSupported(), NeverSupported(), ExtsOnly("GL_EXT_texture_compression_s3tc_srgb", "GL_EXT_texture_compression_s3tc GL_NV_sRGB_formats"), AlwaysSupported(), NeverSupported(),                      NeverSupported()                );
 
     // From GL_OES_compressed_ETC1_RGB8_texture
-    InsertFormatMapping(&map, GL_ETC1_RGB8_OES,                   VersionOrExts(4, 3, "GL_ARB_ES3_compatibility"), AlwaysSupported(), NeverSupported(), VersionOrExts(3, 0, "GL_OES_compressed_ETC1_RGB8_texture"),       AlwaysSupported(), NeverSupported(),                      NeverSupported()                );
+    InsertFormatMapping(&map, GL_ETC1_RGB8_OES,                   NeverSupported(), NeverSupported(), NeverSupported(), VersionOrExts(3, 0, "GL_OES_compressed_ETC1_RGB8_texture"),       AlwaysSupported(), NeverSupported(),                      NeverSupported()                );
 
     // From GL_OES_texture_compression_astc
     //                       | Format                                   | OpenGL texture                                 | Filter           | Render          | OpenGL ES texture support                      | Filter           | ES attachment   | ES renderbuffer |
@@ -690,15 +690,6 @@ static GLenum GetNativeCompressedFormat(const FunctionsGL *functions,
             // Pass GL_COMPRESSED_RGB8_ETC2 as the target format in ES3 and higher because it
             // becomes a core format.
             result = GL_COMPRESSED_RGB8_ETC2;
-        }
-    }
-
-    if (features.avoidDXT1sRGBTextureFormat.enabled)
-    {
-        if (format == GL_COMPRESSED_SRGB_S3TC_DXT1_EXT)
-        {
-            // Pass GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT instead to workaround driver bug.
-            result = GL_COMPRESSED_SRGB_ALPHA_S3TC_DXT1_EXT;
         }
     }
 

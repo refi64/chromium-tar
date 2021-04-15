@@ -4,6 +4,8 @@
 
 package org.chromium.weblayer_private.interfaces;
 
+import org.chromium.weblayer_private.interfaces.IClientPage;
+
 /**
  * Provides information about a navigation.
  */
@@ -41,4 +43,9 @@ interface INavigation {
 
   // @since 88
   void disableNetworkErrorAutoReload() = 17;
+
+  // @since 90
+  IClientPage getPage() = 18;
+  boolean isFormSubmission() = 19;
+  String getReferrer() = 20;
 }

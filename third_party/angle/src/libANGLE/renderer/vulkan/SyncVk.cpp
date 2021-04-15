@@ -137,18 +137,34 @@ angle::Result SyncHelper::clientWait(Context *context,
         return angle::Result::Continue;
     }
 
+    // We defer (ignore) flushes, so it's possible that the glFence's signal operation is pending
+    // submission.
+    if (contextVk)
+    {
+        if (flushCommands || usedInRecordedCommands())
+        {
+            ANGLE_TRY(contextVk->flushImpl(nullptr));
+        }
+    }
+    else
+    {
+        if (!mUse.getSerial().valid())
+        {
+            // The sync object wasn't flushed before waiting, so the wait will always necessarily
+            // time out.
+            WARN() << "clientWaitSync called without flushing sync object and/or a valid context "
+                      "active.";
+            *outResult = VK_TIMEOUT;
+            return angle::Result::Continue;
+        }
+    }
+
     // If timeout is zero, there's no need to wait, so return timeout already.
+    // Do this after (possibly) flushing, since some apps/tests/traces are relying on this behavior.
     if (timeout == 0)
     {
         *outResult = VK_TIMEOUT;
         return angle::Result::Continue;
-    }
-
-    // We defer (ignore) flushes, so it's possible that the glFence's signal operation is pending
-    // submission.
-    if ((flushCommands && contextVk) || usedInRecordedCommands())
-    {
-        ANGLE_TRY(contextVk->flushImpl(nullptr));
     }
 
     ASSERT(mUse.getSerial().valid());
@@ -452,8 +468,14 @@ angle::Result SyncVk::serverWait(const gl::Context *context, GLbitfield flags, G
 
 angle::Result SyncVk::getStatus(const gl::Context *context, GLint *outResult)
 {
+    ContextVk *contextVk = vk::GetImpl(context);
+    if (contextVk->getShareGroupVk()->isSyncObjectPendingFlush())
+    {
+        ANGLE_TRY(contextVk->flushImpl(nullptr));
+    }
+
     bool signaled = false;
-    ANGLE_TRY(mSyncHelper.getStatus(vk::GetImpl(context), &signaled));
+    ANGLE_TRY(mSyncHelper.getStatus(contextVk, &signaled));
 
     *outResult = signaled ? GL_SIGNALED : GL_UNSIGNALED;
     return angle::Result::Continue;

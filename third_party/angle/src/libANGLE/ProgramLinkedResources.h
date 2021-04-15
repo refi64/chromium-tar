@@ -70,6 +70,7 @@ class UniformLinker final : angle::NonCopyable
                                               std::vector<LinkedUniform> &samplerUniforms,
                                               std::vector<LinkedUniform> &imageUniforms,
                                               std::vector<LinkedUniform> &atomicCounterUniforms,
+                                              std::vector<LinkedUniform> &inputAttachmentUniforms,
                                               std::vector<UnusedUniform> &unusedUniforms,
                                               InfoLog &infoLog);
 
@@ -196,18 +197,24 @@ class AtomicCounterBufferLinker final : angle::NonCopyable
 // TODO(jmadill): Integrate uniform linking/filtering as well as interface blocks.
 struct UnusedUniform
 {
-    UnusedUniform(std::string name, bool isSampler, bool isImage, bool isAtomicCounter)
+    UnusedUniform(std::string name,
+                  bool isSampler,
+                  bool isImage,
+                  bool isAtomicCounter,
+                  bool isFragmentInOut)
     {
         this->name            = name;
         this->isSampler       = isSampler;
         this->isImage         = isImage;
         this->isAtomicCounter = isAtomicCounter;
+        this->isFragmentInOut = isFragmentInOut;
     }
 
     std::string name;
     bool isSampler;
     bool isImage;
     bool isAtomicCounter;
+    bool isFragmentInOut;
 };
 
 struct ProgramLinkedResources
@@ -259,20 +266,28 @@ class ProgramLinkedResourcesLinker final : angle::NonCopyable
 bool LinkValidateProgramGlobalNames(InfoLog &infoLog, const HasAttachedShaders &programOrPipeline);
 bool LinkValidateShaderInterfaceMatching(const std::vector<sh::ShaderVariable> &outputVaryings,
                                          const std::vector<sh::ShaderVariable> &inputVaryings,
-                                         ShaderType outputShaderType,
-                                         ShaderType inputShaderType,
-                                         int outputShaderVersion,
-                                         int inputShaderVersion,
+                                         ShaderType frontShaderType,
+                                         ShaderType backShaderType,
+                                         int frontShaderVersion,
+                                         int backShaderVersion,
                                          bool isSeparable,
                                          InfoLog &infoLog);
-bool LinkValidateBuiltInVaryings(const std::vector<sh::ShaderVariable> &vertexVaryings,
-                                 const std::vector<sh::ShaderVariable> &fragmentVaryings,
-                                 int vertexShaderVersion,
+bool LinkValidateBuiltInVaryingsInvariant(const std::vector<sh::ShaderVariable> &vertexVaryings,
+                                          const std::vector<sh::ShaderVariable> &fragmentVaryings,
+                                          int vertexShaderVersion,
+                                          InfoLog &infoLog);
+bool LinkValidateBuiltInVaryings(const std::vector<sh::ShaderVariable> &inputVaryings,
+                                 const std::vector<sh::ShaderVariable> &outputVaryings,
+                                 ShaderType inputShaderType,
+                                 ShaderType outputShaderType,
+                                 int inputShaderVersion,
+                                 int outputShaderVersion,
                                  InfoLog &infoLog);
 LinkMismatchError LinkValidateProgramVariables(const sh::ShaderVariable &variable1,
                                                const sh::ShaderVariable &variable2,
                                                bool validatePrecision,
-                                               bool validateArraySize,
+                                               bool treatVariable1AsNonArray,
+                                               bool treatVariable2AsNonArray,
                                                std::string *mismatchedStructOrBlockMemberName);
 void AddProgramVariableParentPrefix(const std::string &parentName,
                                     std::string *mismatchedFieldName);

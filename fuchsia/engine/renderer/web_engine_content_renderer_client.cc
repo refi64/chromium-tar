@@ -128,7 +128,12 @@ WebEngineRenderFrameObserver*
 WebEngineContentRendererClient::GetWebEngineRenderFrameObserverForRenderFrameId(
     int render_frame_id) const {
   auto iter = render_frame_id_to_observer_map_.find(render_frame_id);
-  DCHECK(iter != render_frame_id_to_observer_map_.end());
+
+  // TODO(https://crbug.com/1181062): Change this back to a DCHECK once the root
+  // cause of this bug has been found.
+  CHECK(iter != render_frame_id_to_observer_map_.end())
+      << "No WebEngineRenderFrameObserver for RenderFrame ID "
+      << render_frame_id;
   return iter->second.get();
 }
 
@@ -138,17 +143,15 @@ void WebEngineContentRendererClient::OnRenderFrameDeleted(int render_frame_id) {
 }
 
 void WebEngineContentRendererClient::RenderThreadStarted() {
-  // Behavior of browser tests should not depend on things outside of their
-  // control (like the amount of memory on the system running the tests).
-  if (base::CommandLine::ForCurrentProcess()->HasSwitch(switches::kBrowserTest))
-    return;
-
-  if (!base::FeatureList::IsEnabled(features::kHandleMemoryPressureInRenderer))
-    return;
-
-  memory_pressure_monitor_ =
-      std::make_unique<util::MultiSourceMemoryPressureMonitor>();
-  memory_pressure_monitor_->Start();
+  if (base::FeatureList::IsEnabled(features::kHandleMemoryPressureInRenderer) &&
+      // Behavior of browser tests should not depend on things outside of their
+      // control (like the amount of memory on the system running the tests).
+      !base::CommandLine::ForCurrentProcess()->HasSwitch(
+          switches::kBrowserTest)) {
+    memory_pressure_monitor_ =
+        std::make_unique<util::MultiSourceMemoryPressureMonitor>();
+    memory_pressure_monitor_->Start();
+  }
 }
 
 void WebEngineContentRendererClient::RenderFrameCreated(

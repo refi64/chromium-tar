@@ -27,6 +27,14 @@
 #include "ui/views/widget/widget.h"
 #include "url/gurl.h"
 
+namespace {
+
+// The maximum size that the web contents can be. It caps the memory consumption
+// incurred by web contents rendering.
+constexpr gfx::Size kMaxWebContentsSize(2000, 2000);
+
+}  // namespace
+
 ClipboardImageModelRequest::Params::Params(const base::UnguessableToken& id,
                                            const std::string& html_markup,
                                            ImageModelCallback callback)
@@ -214,7 +222,7 @@ void ClipboardImageModelRequest::RenderViewHostChanged(
     return;
 
   web_contents()->GetRenderWidgetHostView()->EnableAutoResize(
-      gfx::Size(1, 1), gfx::Size(INT_MAX, INT_MAX));
+      gfx::Size(1, 1), kMaxWebContentsSize);
 }
 
 void ClipboardImageModelRequest::OnVisualStateChangeFinished(bool done) {
@@ -253,10 +261,12 @@ void ClipboardImageModelRequest::CopySurface() {
   source_view->CopyFromSurface(
       /*src_rect=*/gfx::Rect(), /*output_size=*/gfx::Size(),
       base::BindOnce(&ClipboardImageModelRequest::OnCopyComplete,
-                     weak_ptr_factory_.GetWeakPtr()));
+                     weak_ptr_factory_.GetWeakPtr(),
+                     source_view->GetDeviceScaleFactor()));
 }
 
-void ClipboardImageModelRequest::OnCopyComplete(const SkBitmap& bitmap) {
+void ClipboardImageModelRequest::OnCopyComplete(float device_scale_factor,
+                                                const SkBitmap& bitmap) {
   if (!deliver_image_model_callback_) {
     Stop(RequestStopReason::kMultipleCopyCompletion);
     return;
@@ -264,7 +274,7 @@ void ClipboardImageModelRequest::OnCopyComplete(const SkBitmap& bitmap) {
 
   std::move(deliver_image_model_callback_)
       .Run(ui::ImageModel::FromImageSkia(
-          gfx::ImageSkia::CreateFrom1xBitmap(bitmap)));
+          gfx::ImageSkia(gfx::ImageSkiaRep(bitmap, device_scale_factor))));
   Stop(RequestStopReason::kFulfilled);
 }
 

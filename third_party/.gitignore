@@ -23,7 +23,9 @@
 /android_system_sdk/*.jar
 /android_tools_internal/
 /android_webview_glue/src
-/androidx/lib/
+/androidx/BUILD.gn
+/androidx/additional_readme_paths.json
+/androidx/libs/
 /apache-portable-runtime/src
 /apache-win32/bin/*.exe
 /apache-win32/bin/*.dll
@@ -52,6 +54,7 @@
 /checkstyle/*.jar
 /chromeos_login_manager
 /chromeos_text_input
+/chromevox/third_party/sre/src
 /chromite
 /cld_2/src
 /cld_3/src
@@ -116,7 +119,7 @@
 /jacoco/lib/
 /javalang/src/
 /jdk/current
-/jdk/extras
+/jdk/extras/java_8
 /jsr-305/src
 /junit/src
 /khronos_glcts
@@ -177,6 +180,7 @@
 /openh264/src
 /openscreen/src
 /openxr/src
+/ots/src
 /pdfsqueeze
 /pdfium
 /pefile
@@ -237,7 +241,6 @@
 /vulkan_memory_allocator
 /wayland/src
 /wayland-protocols/src
-/wds/src
 /webdriver/pylib
 /webdriver/python/selenium
 /webgl

@@ -102,6 +102,36 @@ GLenum GetGeometryShaderPrimitiveTypeEnum(sh::TLayoutPrimitiveType primitiveType
     }
 }
 
+GLenum GetTessellationShaderTypeEnum(sh::TLayoutTessEvaluationType type)
+{
+    switch (type)
+    {
+        case EtetTriangles:
+            return GL_TRIANGLES;
+        case EtetQuads:
+            return GL_QUADS;
+        case EtetIsolines:
+            return GL_ISOLINES;
+        case EtetEqualSpacing:
+            return GL_EQUAL;
+        case EtetFractionalEvenSpacing:
+            return GL_FRACTIONAL_EVEN;
+        case EtetFractionalOddSpacing:
+            return GL_FRACTIONAL_ODD;
+        case EtetCw:
+            return GL_CW;
+        case EtetCcw:
+            return GL_CCW;
+        case EtetPointMode:
+            return GL_TESS_GEN_POINT_MODE;
+
+        case EtetUndefined:
+        default:
+            UNREACHABLE();
+            return GL_INVALID_VALUE;
+    }
+}
+
 }  // anonymous namespace
 
 //
@@ -160,6 +190,7 @@ void InitBuiltInResources(ShBuiltInResources *resources)
     resources->EXT_shader_texture_lod                      = 0;
     resources->WEBGL_debug_shader_precision                = 0;
     resources->EXT_shader_framebuffer_fetch                = 0;
+    resources->EXT_shader_framebuffer_fetch_non_coherent   = 0;
     resources->NV_shader_framebuffer_fetch                 = 0;
     resources->ARM_shader_framebuffer_fetch                = 0;
     resources->OVR_multiview                               = 0;
@@ -188,8 +219,11 @@ void InitBuiltInResources(ShBuiltInResources *resources)
     resources->OES_texture_buffer                          = 0;
     resources->EXT_texture_buffer                          = 0;
     resources->OES_sample_variables                        = 0;
+    resources->EXT_clip_cull_distance                      = 0;
 
-    resources->MaxClipDistances = 0;
+    resources->MaxClipDistances                = 8;
+    resources->MaxCullDistances                = 8;
+    resources->MaxCombinedClipAndCullDistances = 8;
 
     // Disable highp precision in fragment shader by default.
     resources->FragmentPrecisionHigh = 0;
@@ -710,6 +744,50 @@ bool HasValidGeometryShaderMaxVertices(const ShHandle handle)
     return compiler->getGeometryShaderMaxVertices() >= 0;
 }
 
+bool HasValidTessGenMode(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return compiler->getTessEvaluationShaderInputPrimitiveType() != EtetUndefined;
+}
+
+bool HasValidTessGenSpacing(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return compiler->getTessEvaluationShaderInputVertexSpacingType() != EtetUndefined;
+}
+
+bool HasValidTessGenVertexOrder(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return compiler->getTessEvaluationShaderInputOrderingType() != EtetUndefined;
+}
+
+bool HasValidTessGenPointMode(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return compiler->getTessEvaluationShaderInputPointType() != EtetUndefined;
+}
+
 GLenum GetGeometryShaderInputPrimitiveType(const ShHandle handle)
 {
     ASSERT(handle);
@@ -756,6 +834,62 @@ int GetGeometryShaderMaxVertices(const ShHandle handle)
     return maxVertices;
 }
 
+int GetTessControlShaderVertices(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    int vertices = compiler->getTessControlShaderOutputVertices();
+    return vertices;
+}
+
+GLenum GetTessGenMode(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return GetTessellationShaderTypeEnum(compiler->getTessEvaluationShaderInputPrimitiveType());
+}
+
+GLenum GetTessGenSpacing(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return GetTessellationShaderTypeEnum(compiler->getTessEvaluationShaderInputVertexSpacingType());
+}
+
+GLenum GetTessGenVertexOrder(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return GetTessellationShaderTypeEnum(compiler->getTessEvaluationShaderInputOrderingType());
+}
+
+GLenum GetTessGenPointMode(const ShHandle handle)
+{
+    ASSERT(handle);
+
+    TShHandleBase *base = static_cast<TShHandleBase *>(handle);
+    TCompiler *compiler = base->getAsCompiler();
+    ASSERT(compiler);
+
+    return GetTessellationShaderTypeEnum(compiler->getTessEvaluationShaderInputPointType());
+}
+
 unsigned int GetShaderSharedMemorySize(const ShHandle handle)
 {
     ASSERT(handle);
@@ -793,6 +927,14 @@ const char kAtomicCountersBlockName[] = "ANGLEAtomicCounters";
 const char kLineRasterEmulationPosition[] = "ANGLEPosition";
 
 const char kXfbEmulationGetOffsetsFunctionName[] = "ANGLEGetXfbOffsets";
+const char kXfbEmulationBufferBlockName[]        = "ANGLEXfbBuffer";
+const char kXfbEmulationBufferName[]             = "ANGLEXfb";
+const char kXfbEmulationBufferFieldName[]        = "xfbOut";
+
+const char kXfbExtensionPositionOutName[] = "ANGLEXfbPosition";
+
+// EXT_shader_framebuffer_fetch / EXT_shader_framebuffer_fetch_non_coherent
+const char kInputAttachmentName[] = "ANGLEInputAttachment";
 
 }  // namespace vk
 

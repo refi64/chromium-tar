@@ -301,6 +301,19 @@ angle::Result CopyAndStageImageSubresource(ContextVk *contextVk,
 
     return angle::Result::Continue;
 }
+
+const vk::Format *AdjustStorageViewFormatPerWorkarounds(ContextVk *contextVk,
+                                                        const vk::Format *intended)
+{
+    // r32f images are emulated with r32ui.
+    if (contextVk->getFeatures().emulateR32fImageAtomicExchange.enabled &&
+        intended->actualImageFormatID == angle::FormatID::R32_FLOAT)
+    {
+        return &contextVk->getRenderer()->getFormat(angle::FormatID::R32_UINT);
+    }
+
+    return intended;
+}
 }  // anonymous namespace
 
 // TextureVk implementation.
@@ -1353,8 +1366,8 @@ angle::Result TextureVk::setEGLImageTarget(const gl::Context *context,
 
         vk::CommandBuffer *commandBuffer;
         ANGLE_TRY(contextVk->getOutsideRenderPassCommandBuffer({}, &commandBuffer));
-        mImage->changeLayoutAndQueue(mImage->getAspectFlags(), newLayout, rendererQueueFamilyIndex,
-                                     commandBuffer);
+        mImage->changeLayoutAndQueue(contextVk, mImage->getAspectFlags(), newLayout,
+                                     rendererQueueFamilyIndex, commandBuffer);
     }
 
     return angle::Result::Continue;
@@ -2586,7 +2599,9 @@ angle::Result TextureVk::getStorageImageView(ContextVk *contextVk,
                                              const vk::ImageView **imageViewOut)
 {
     angle::FormatID formatID = angle::Format::InternalFormatToID(binding.format);
-    const vk::Format &format = contextVk->getRenderer()->getFormat(formatID);
+    const vk::Format *format = &contextVk->getRenderer()->getFormat(formatID);
+
+    format = AdjustStorageViewFormatPerWorkarounds(contextVk, format);
 
     gl::LevelIndex nativeLevelGL =
         getNativeImageLevel(gl::LevelIndex(static_cast<uint32_t>(binding.level)));
@@ -2598,7 +2613,7 @@ angle::Result TextureVk::getStorageImageView(ContextVk *contextVk,
 
         return getImageViews().getLevelLayerStorageImageView(
             contextVk, *mImage, nativeLevelVk, nativeLayer,
-            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, format.actualImageFormatID,
+            VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, format->actualImageFormatID,
             imageViewOut);
     }
 
@@ -2606,12 +2621,13 @@ angle::Result TextureVk::getStorageImageView(ContextVk *contextVk,
 
     return getImageViews().getLevelStorageImageView(
         contextVk, mState.getType(), *mImage, nativeLevelVk, nativeLayer,
-        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, format.actualImageFormatID,
+        VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT, format->actualImageFormatID,
         imageViewOut);
 }
 
 angle::Result TextureVk::getBufferViewAndRecordUse(ContextVk *contextVk,
                                                    const vk::Format *imageUniformFormat,
+                                                   bool isImage,
                                                    const vk::BufferView **viewOut)
 {
     RendererVk *renderer = contextVk->getRenderer();
@@ -2623,6 +2639,11 @@ angle::Result TextureVk::getBufferViewAndRecordUse(ContextVk *contextVk,
     {
         const gl::ImageDesc &baseLevelDesc = mState.getBaseLevelDesc();
         imageUniformFormat = &renderer->getFormat(baseLevelDesc.format.info->sizedInternalFormat);
+    }
+
+    if (isImage)
+    {
+        imageUniformFormat = AdjustStorageViewFormatPerWorkarounds(contextVk, imageUniformFormat);
     }
 
     // Create a view for the required format.
@@ -2645,38 +2666,18 @@ angle::Result TextureVk::initImage(ContextVk *contextVk,
     gl_vk::GetExtentsAndLayerCount(mState.getType(), extents, &vkExtent, &layerCount);
     GLint samples = mState.getBaseLevelDesc().samples ? mState.getBaseLevelDesc().samples : 1;
 
-    // With the introduction of sRGB related GLES extensions any texture could be respecified
-    // causing it to be interpreted in a different colorspace. Create the VkImage accordingly.
-    VkImageFormatListCreateInfoKHR *additionalCreateInfo = nullptr;
-    angle::FormatID imageFormat                          = format.actualImageFormatID;
-    angle::FormatID imageListFormat                      = format.actualImageFormat().isSRGB
-                                          ? ConvertToLinear(imageFormat)
-                                          : ConvertToSRGB(imageFormat);
-    VkFormat vkFormat = vk::GetVkFormatFromFormatID(imageListFormat);
+    bool imageFormatListEnabled = false;
+    ANGLE_TRY(mImage->initExternal(
+        contextVk, mState.getType(), vkExtent, format, samples, mImageUsageFlags, mImageCreateFlags,
+        vk::ImageLayout::Undefined, nullptr, gl::LevelIndex(mState.getEffectiveBaseLevel()),
+        gl::LevelIndex(mState.getEffectiveMaxLevel()), levelCount, layerCount,
+        contextVk->isRobustResourceInitEnabled(), &imageFormatListEnabled));
 
-    VkImageFormatListCreateInfoKHR formatListInfo = {};
-    if (renderer->getFeatures().supportsImageFormatList.enabled &&
-        renderer->haveSameFormatFeatureBits(format.actualImageFormatID, imageListFormat))
+    if (imageFormatListEnabled)
     {
-        mRequiresMutableStorage = true;
-
-        // Add VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT to VkImage create flag
         mImageCreateFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
-
-        // There is just 1 additional format we might use to create a VkImageView for this VkImage
-        formatListInfo.sType           = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO_KHR;
-        formatListInfo.pNext           = nullptr;
-        formatListInfo.viewFormatCount = 1;
-        formatListInfo.pViewFormats    = &vkFormat;
-        additionalCreateInfo           = &formatListInfo;
+        mRequiresMutableStorage = true;
     }
-
-    ANGLE_TRY(mImage->initExternal(contextVk, mState.getType(), vkExtent, format, samples,
-                                   mImageUsageFlags, mImageCreateFlags, vk::ImageLayout::Undefined,
-                                   additionalCreateInfo,
-                                   gl::LevelIndex(mState.getEffectiveBaseLevel()),
-                                   gl::LevelIndex(mState.getEffectiveMaxLevel()), levelCount,
-                                   layerCount, contextVk->isRobustResourceInitEnabled()));
 
     const VkMemoryPropertyFlags flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
 

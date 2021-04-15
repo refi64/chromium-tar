@@ -212,6 +212,8 @@ static_assert(sizeof(ShaderBitSet) == sizeof(uint8_t), "Unexpected size");
 template <typename T>
 using ShaderMap = angle::PackedEnumMap<ShaderType, T>;
 
+const char *ShaderTypeToString(ShaderType shaderType);
+
 TextureType SamplerTypeToTextureType(GLenum samplerType);
 TextureType ImageTypeToTextureType(GLenum imageType);
 
@@ -755,6 +757,11 @@ PackParam(FromT from)
 struct UniformLocation
 {
     int value;
+};
+
+struct UniformBlockIndex
+{
+    uint32_t value;
 };
 }  // namespace gl
 

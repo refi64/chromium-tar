@@ -100,6 +100,8 @@ struct ShaderVariable
     unsigned int getExternalSize() const;
 
     bool isStruct() const { return !fields.empty(); }
+    const std::string &getStructName() const { return structOrBlockName; }
+    void setStructName(const std::string &newName) { structOrBlockName = newName; }
 
     // All of the shader's variables are described using nested data
     // structures. This is needed in order to disambiguate similar looking
@@ -153,10 +155,12 @@ struct ShaderVariable
     // necessarily active. GLES 3.0.5 section 2.12.6. GLES 3.1 section 7.3.1.
     bool active;
     std::vector<ShaderVariable> fields;
-    // Struct name is used for varyings of struct type.  Additionally, it's used with shader I/O
-    // blocks, in which case it contains the block name.
-    std::string structName;
-    std::string mappedStructName;
+    // structOrBlockName is used for:
+    //
+    // - varyings of struct type, in which case it contains the struct name.
+    // - shader I/O blocks, in which case it contains the block name.
+    std::string structOrBlockName;
+    std::string mappedStructOrBlockName;
 
     // Only applies to interface block fields. Kept here for simplicity.
     bool isRowMajorLayout;
@@ -184,6 +188,9 @@ struct ShaderVariable
     bool readonly;
     bool writeonly;
 
+    // From EXT_shader_framebuffer_fetch
+    bool isFragmentInOut;
+
     // OutputVariable
     // From EXT_blend_func_extended.
     int index;
@@ -201,6 +208,8 @@ struct ShaderVariable
     InterpolationType interpolation;
     bool isInvariant;
     bool isShaderIOBlock;
+    bool isPatch;
+
     // Decide whether two varyings are the same at shader link time,
     // assuming they are from consecutive shader stages.
     // Invariance needs to match only in ESSL1. Relevant spec sections:

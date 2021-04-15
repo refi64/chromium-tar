@@ -65,6 +65,7 @@ enum class LinkMismatchError
     // Shared
     NO_MISMATCH,
     TYPE_MISMATCH,
+    ARRAYNESS_MISMATCH,
     ARRAY_SIZE_MISMATCH,
     PRECISION_MISMATCH,
     STRUCT_NAME_MISMATCH,
@@ -106,6 +107,12 @@ void LoadBlockMemberInfo(BinaryInputStream *stream, sh::BlockMemberInfo *var);
 
 void WriteShaderVar(BinaryOutputStream *stream, const sh::ShaderVariable &var);
 void LoadShaderVar(BinaryInputStream *stream, sh::ShaderVariable *var);
+
+void WriteInterfaceBlock(BinaryOutputStream *stream, const InterfaceBlock &block);
+void LoadInterfaceBlock(BinaryInputStream *stream, InterfaceBlock *block);
+
+void WriteShaderVariableBuffer(BinaryOutputStream *stream, const ShaderVariableBuffer &var);
+void LoadShaderVariableBuffer(BinaryInputStream *stream, ShaderVariableBuffer *var);
 
 // Struct used for correlating uniforms/elements of uniform arrays to handles
 struct VariableLocation
@@ -232,7 +239,7 @@ class ProgramState final : angle::NonCopyable
     }
     const UniformBlockBindingMask &getActiveUniformBlockBindingsMask() const
     {
-        return mActiveUniformBlockBindings;
+        return mExecutable->getActiveUniformBlockBindings();
     }
     const std::vector<sh::ShaderVariable> &getProgramInputs() const
     {
@@ -249,7 +256,7 @@ class ProgramState final : angle::NonCopyable
     }
     const std::vector<VariableLocation> &getSecondaryOutputLocations() const
     {
-        return mSecondaryOutputLocations;
+        return mExecutable->getSecondaryOutputLocations();
     }
     const std::vector<LinkedUniform> &getUniforms() const { return mExecutable->getUniforms(); }
     const std::vector<VariableLocation> &getUniformLocations() const { return mUniformLocations; }
@@ -275,6 +282,7 @@ class ProgramState final : angle::NonCopyable
     const RangeUI &getSamplerUniformRange() const { return mExecutable->getSamplerUniformRange(); }
     const RangeUI &getImageUniformRange() const { return mExecutable->getImageUniformRange(); }
     const RangeUI &getAtomicCounterUniformRange() const { return mAtomicCounterUniformRange; }
+    const RangeUI &getFragmentInoutRange() const { return mExecutable->getFragmentInoutRange(); }
 
     const std::vector<TransformFeedbackVarying> &getLinkedTransformFeedbackVaryings() const
     {
@@ -385,15 +393,9 @@ class ProgramState final : angle::NonCopyable
     uint32_t mLocationsUsedForXfbExtension;
     std::vector<std::string> mTransformFeedbackVaryingNames;
 
-    // For faster iteration on the blocks currently being bound.
-    UniformBlockBindingMask mActiveUniformBlockBindings;
-
     std::vector<VariableLocation> mUniformLocations;
     std::vector<BufferVariable> mBufferVariables;
     RangeUI mAtomicCounterUniformRange;
-
-    // EXT_blend_func_extended secondary outputs (ones with index 1) in ESSL 3.00 shaders.
-    std::vector<VariableLocation> mSecondaryOutputLocations;
 
     DrawBufferMask mActiveOutputVariables;
 
@@ -454,6 +456,8 @@ class HasAttachedShaders
 {
   public:
     virtual Shader *getAttachedShader(ShaderType shaderType) const = 0;
+
+    ShaderType getTransformFeedbackStage() const;
 
   protected:
     virtual ~HasAttachedShaders() {}
@@ -633,7 +637,7 @@ class Program final : public LabeledObject, public angle::Subject, public HasAtt
     void getUniformiv(const Context *context, UniformLocation location, GLint *params) const;
     void getUniformuiv(const Context *context, UniformLocation location, GLuint *params) const;
 
-    void getActiveUniformBlockName(const GLuint blockIndex,
+    void getActiveUniformBlockName(const UniformBlockIndex blockIndex,
                                    GLsizei bufSize,
                                    GLsizei *length,
                                    GLchar *blockName) const;
@@ -666,7 +670,7 @@ class Program final : public LabeledObject, public angle::Subject, public HasAtt
     GLuint getUniformBlockIndex(const std::string &name) const;
     GLuint getShaderStorageBlockIndex(const std::string &name) const;
 
-    void bindUniformBlock(GLuint uniformBlockIndex, GLuint uniformBlockBinding);
+    void bindUniformBlock(UniformBlockIndex uniformBlockIndex, GLuint uniformBlockBinding);
     GLuint getUniformBlockBinding(GLuint uniformBlockIndex) const;
     GLuint getShaderStorageBlockBinding(GLuint shaderStorageBlockIndex) const;
 
@@ -746,6 +750,12 @@ class Program final : public LabeledObject, public angle::Subject, public HasAtt
     PrimitiveMode getGeometryShaderOutputPrimitiveType() const;
     GLint getGeometryShaderInvocations() const;
     GLint getGeometryShaderMaxVertices() const;
+
+    GLint getTessControlShaderVertices() const;
+    GLenum getTessGenMode() const;
+    GLenum getTessGenPointMode() const;
+    GLenum getTessGenSpacing() const;
+    GLenum getTessGenVertexOrder() const;
 
     const ProgramState &getState() const
     {

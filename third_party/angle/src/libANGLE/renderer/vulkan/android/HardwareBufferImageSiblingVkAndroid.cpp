@@ -13,14 +13,15 @@
 #include "libANGLE/Display.h"
 #include "libANGLE/renderer/vulkan/DisplayVk.h"
 #include "libANGLE/renderer/vulkan/RendererVk.h"
-
-#include <android/hardware_buffer.h>
+#include "libANGLE/renderer/vulkan/android/AHBFunctions.h"
+#include "libANGLE/renderer/vulkan/android/DisplayVkAndroid.h"
 
 namespace rx
 {
 
 namespace
 {
+
 VkImageTiling AhbDescUsageToVkImageTiling(const AHardwareBuffer_Desc &ahbDescription)
 {
     if ((ahbDescription.usage & AHARDWAREBUFFER_USAGE_CPU_READ_MASK) != 0 ||
@@ -140,6 +141,9 @@ VkImageUsageFlags AhbDescUsageToVkImageUsage(const AHardwareBuffer_Desc &ahbDesc
 
 angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk)
 {
+    const AHBFunctions &functions = static_cast<DisplayVkAndroid *>(displayVk)->getAHBFunctions();
+    ANGLE_VK_CHECK(displayVk, functions.valid(), VK_ERROR_INITIALIZATION_FAILED);
+
     RendererVk *renderer = displayVk->getRenderer();
 
     struct ANativeWindowBuffer *windowBuffer =
@@ -154,7 +158,7 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
     struct AHardwareBuffer *hardwareBuffer =
         angle::android::ANativeWindowBufferToAHardwareBuffer(windowBuffer);
 
-    AHardwareBuffer_acquire(hardwareBuffer);
+    functions.acquire(hardwareBuffer);
     VkAndroidHardwareBufferFormatPropertiesANDROID bufferFormatProperties;
     bufferFormatProperties.sType =
         VK_STRUCTURE_TYPE_ANDROID_HARDWARE_BUFFER_FORMAT_PROPERTIES_ANDROID;
@@ -181,7 +185,7 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
     // 1. Derive VkImageTiling mode based on AHB usage flags
     // 2. Map AHB usage flags to VkImageUsageFlags
     AHardwareBuffer_Desc ahbDescription;
-    AHardwareBuffer_describe(hardwareBuffer, &ahbDescription);
+    functions.describe(hardwareBuffer, &ahbDescription);
     VkImageTiling imageTilingMode = AhbDescUsageToVkImageTiling(ahbDescription);
     VkImageUsageFlags usage = AhbDescUsageToVkImageUsage(ahbDescription, isDepthOrStencilFormat);
 
@@ -200,30 +204,7 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
         imageTilingMode = VK_IMAGE_TILING_OPTIMAL;
     }
 
-    // With the introduction of sRGB related GLES extensions any texture could be respecified
-    // causing it to be interpreted in a different colorspace. Create the VkImage accordingly.
-    VkImageCreateFlags imageCreateFlags = vk::kVkImageCreateFlagsNone;
-    angle::FormatID imageFormatID       = vkFormat.actualImageFormatID;
-    angle::FormatID imageListFormatID   = vkFormat.actualImageFormat().isSRGB
-                                            ? ConvertToLinear(imageFormatID)
-                                            : ConvertToSRGB(imageFormatID);
-    VkFormat imageListVkFormat = vk::GetVkFormatFromFormatID(imageListFormatID);
-
-    VkImageFormatListCreateInfoKHR formatListInfo = {};
-    if (renderer->getFeatures().supportsImageFormatList.enabled)
-    {
-        // Add VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT to VkImage create flag
-        imageCreateFlags |= VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT;
-
-        // There is just 1 additional format we might use to create a VkImageView for this VkImage
-        formatListInfo.sType           = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO_KHR;
-        formatListInfo.viewFormatCount = 1;
-        formatListInfo.pViewFormats    = &imageListVkFormat;
-        externalFormat.pNext           = &formatListInfo;
-    }
-
     VkExternalMemoryImageCreateInfo externalMemoryImageCreateInfo = {};
-
     externalMemoryImageCreateInfo.sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO;
     externalMemoryImageCreateInfo.pNext = &externalFormat;
     externalMemoryImageCreateInfo.handleTypes =
@@ -241,9 +222,9 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
     ANGLE_TRY(mImage->initExternal(
         displayVk, gl::TextureType::_2D, vkExtents,
         bufferFormatProperties.format == VK_FORMAT_UNDEFINED ? externalVkFormat : vkFormat, 1,
-        usage, imageCreateFlags, vk::ImageLayout::ExternalPreInitialized,
+        usage, vk::kVkImageCreateFlagsNone, vk::ImageLayout::ExternalPreInitialized,
         &externalMemoryImageCreateInfo, gl::LevelIndex(0), gl::LevelIndex(0), 1, 1,
-        robustInitEnabled));
+        robustInitEnabled, nullptr));
 
     VkImportAndroidHardwareBufferInfoANDROID importHardwareBufferInfo = {};
     importHardwareBufferInfo.sType  = VK_STRUCTURE_TYPE_IMPORT_ANDROID_HARDWARE_BUFFER_INFO_ANDROID;
@@ -310,7 +291,10 @@ angle::Result HardwareBufferImageSiblingVkAndroid::initImpl(DisplayVk *displayVk
 
 void HardwareBufferImageSiblingVkAndroid::onDestroy(const egl::Display *display)
 {
-    AHardwareBuffer_release(angle::android::ANativeWindowBufferToAHardwareBuffer(
+    const AHBFunctions &functions = GetImplAs<DisplayVkAndroid>(display)->getAHBFunctions();
+    ASSERT(functions.valid());
+
+    functions.release(angle::android::ANativeWindowBufferToAHardwareBuffer(
         angle::android::ClientBufferToANativeWindowBuffer(mBuffer)));
 
     ASSERT(mImage == nullptr);

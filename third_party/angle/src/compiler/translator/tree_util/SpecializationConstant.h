@@ -23,7 +23,7 @@ namespace sh
 class SpecConst
 {
   public:
-    SpecConst(TSymbolTable *symbolTable, ShCompileOptions compileOptions);
+    SpecConst(TSymbolTable *symbolTable, ShCompileOptions compileOptions, GLenum shaderType);
     virtual ~SpecConst();
 
     // Line rasterizaton emulation
@@ -34,7 +34,6 @@ class SpecConst
     TIntermTyped *getMultiplierYForDFdx();
     TIntermTyped *getMultiplierXForDFdy();
     TIntermTyped *getMultiplierYForDFdy();
-    TIntermTyped *getPreRotationMatrix();
     TIntermTyped *getFragRotationMatrix();
     TIntermTyped *getFlipXY();
     TIntermTyped *getNegFlipXY();

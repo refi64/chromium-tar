@@ -1,5 +1,5 @@
 //
-// Copyright (c) 2019 The ANGLE Project Authors. All rights reserved.
+// Copyright 2019 The ANGLE Project Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 //
@@ -27,8 +27,8 @@ namespace sh
 class SpecConstMetal : public SpecConst
 {
   public:
-    SpecConstMetal(TSymbolTable *symbolTable, ShCompileOptions compileOptions)
-        : SpecConst(symbolTable, compileOptions)
+    SpecConstMetal(TSymbolTable *symbolTable, ShCompileOptions compileOptions, GLenum shaderType)
+        : SpecConst(symbolTable, compileOptions, shaderType)
     {}
     ~SpecConstMetal() override {}
 

@@ -59,17 +59,17 @@ TIntermAggregate *ArrayReturnValueToOutParameterTraverser::createReplacementCall
     TIntermAggregate *originalCall,
     TIntermTyped *returnValueTarget)
 {
-    TIntermSequence *replacementArguments = new TIntermSequence();
-    TIntermSequence *originalArguments    = originalCall->getSequence();
+    TIntermSequence replacementArguments;
+    TIntermSequence *originalArguments = originalCall->getSequence();
     for (auto &arg : *originalArguments)
     {
-        replacementArguments->push_back(arg);
+        replacementArguments.push_back(arg);
     }
-    replacementArguments->push_back(returnValueTarget);
+    replacementArguments.push_back(returnValueTarget);
     ASSERT(originalCall->getFunction());
     const TSymbolUniqueId &originalId = originalCall->getFunction()->uniqueId();
     TIntermAggregate *replacementCall = TIntermAggregate::CreateFunctionCall(
-        *mChangedFunctions[originalId.get()].func, replacementArguments);
+        *mChangedFunctions[originalId.get()].func, &replacementArguments);
     replacementCall->setLine(originalCall->getLine());
     return replacementCall;
 }
@@ -170,8 +170,7 @@ bool ArrayReturnValueToOutParameterTraverser::visitAggregate(Visit visit, TInter
             // f(s0);
             TIntermSymbol *returnValueSymbol = CreateTempSymbolNode(returnValue);
             replacements.push_back(createReplacementCall(node, returnValueSymbol));
-            mMultiReplacements.push_back(
-                NodeReplaceWithMultipleEntry(parentBlock, node, replacements));
+            mMultiReplacements.emplace_back(parentBlock, node, std::move(replacements));
         }
         return false;
     }
@@ -201,8 +200,8 @@ bool ArrayReturnValueToOutParameterTraverser::visitBranch(Visit visit, TIntermBr
         replacementBranch->setLine(node->getLine());
         replacements.push_back(replacementBranch);
 
-        mMultiReplacements.push_back(
-            NodeReplaceWithMultipleEntry(getParentNode()->getAsBlock(), node, replacements));
+        mMultiReplacements.emplace_back(getParentNode()->getAsBlock(), node,
+                                        std::move(replacements));
     }
     return false;
 }

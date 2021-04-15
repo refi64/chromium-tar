@@ -53,8 +53,9 @@ struct ProgramTransformOptions final
     uint8_t enableLineRasterEmulation : 1;
     uint8_t removeEarlyFragmentTestsOptimization : 1;
     uint8_t surfaceRotation : 3;
-    uint8_t reserved : 3;  // must initialize to zero
-    static constexpr uint32_t kPermutationCount = 0x1 << 5;
+    uint8_t enableDepthCorrection : 1;
+    uint8_t reserved : 2;  // must initialize to zero
+    static constexpr uint32_t kPermutationCount = 0x1 << 6;
 };
 static_assert(sizeof(ProgramTransformOptions) == 1, "Size check failed");
 static_assert(static_cast<int>(SurfaceRotation::EnumCount) <= 8, "Size check failed");
@@ -67,6 +68,7 @@ class ProgramInfo final : angle::NonCopyable
 
     angle::Result initProgram(ContextVk *contextVk,
                               const gl::ShaderType shaderType,
+                              bool isLastPreFragmentStage,
                               const ShaderInfo &shaderInfo,
                               ProgramTransformOptions optionBits,
                               const ShaderInterfaceVariableInfoMap &variableInfoMap);
@@ -144,7 +146,7 @@ class ProgramExecutableVk
 
     angle::Result updateTexturesDescriptorSet(ContextVk *contextVk);
     angle::Result updateShaderResourcesDescriptorSet(ContextVk *contextVk,
-                                                     vk::ResourceUseList *resourceUseList,
+                                                     FramebufferVk *framebufferVk,
                                                      vk::CommandBufferHelper *commandBufferHelper);
     angle::Result updateTransformFeedbackDescriptorSet(
         const gl::ProgramState &programState,
@@ -152,6 +154,10 @@ class ProgramExecutableVk
         vk::BufferHelper *defaultUniformBuffer,
         ContextVk *contextVk,
         const vk::UniformsAndXfbDesc &xfbBufferDesc);
+    angle::Result updateInputAttachmentDescriptorSet(const gl::ProgramExecutable &executable,
+                                                     const gl::ShaderType shaderType,
+                                                     ContextVk *contextVk,
+                                                     FramebufferVk *framebufferVk);
 
     angle::Result updateDescriptorSets(ContextVk *contextVk, vk::CommandBuffer *commandBuffer);
 
@@ -199,10 +205,11 @@ class ProgramExecutableVk
         const gl::ShaderType shaderType,
         vk::DescriptorSetLayoutDesc *descOut);
     void addImageDescriptorSetDesc(const gl::ProgramExecutable &executable,
-                                   bool useOldRewriteStructSamplers,
                                    vk::DescriptorSetLayoutDesc *descOut);
+    void addInputAttachmentDescriptorSetDesc(const gl::ProgramExecutable &executable,
+                                             const gl::ShaderType shaderType,
+                                             vk::DescriptorSetLayoutDesc *descOut);
     void addTextureDescriptorSetDesc(const gl::ProgramState &programState,
-                                     bool useOldRewriteStructSamplers,
                                      const gl::ActiveTextureArray<vk::TextureUnit> *activeTextures,
                                      vk::DescriptorSetLayoutDesc *descOut);
 
@@ -215,7 +222,6 @@ class ProgramExecutableVk
                                                   ContextVk *contextVk);
     angle::Result updateBuffersDescriptorSet(ContextVk *contextVk,
                                              const gl::ShaderType shaderType,
-                                             vk::ResourceUseList *resourceUseList,
                                              vk::CommandBufferHelper *commandBufferHelper,
                                              const std::vector<gl::InterfaceBlock> &blocks,
                                              VkDescriptorType descriptorType);
@@ -223,7 +229,6 @@ class ProgramExecutableVk
         const gl::ProgramState &programState,
         const gl::ShaderType shaderType,
         ContextVk *contextVk,
-        vk::ResourceUseList *resourceUseList,
         vk::CommandBufferHelper *commandBufferHelper);
     angle::Result updateImagesDescriptorSet(ContextVk *contextVk,
                                             const gl::ProgramExecutable &executable,

@@ -12,6 +12,7 @@
 #include "libANGLE/Context.h"
 #include "libANGLE/Display.h"
 #include "libANGLE/Surface.h"
+#include "libANGLE/renderer/driver_utils.h"
 #include "libANGLE/renderer/glslang_wrapper_utils.h"
 #include "libANGLE/renderer/metal/ContextMtl.h"
 #include "libANGLE/renderer/metal/SurfaceMtl.h"
@@ -137,18 +138,33 @@ egl::Error DisplayMtl::restoreLostDevice(const egl::Display *display)
     return egl::NoError();
 }
 
-std::string DisplayMtl::getVendorString() const
+std::string DisplayMtl::getRendererDescription()
 {
     ANGLE_MTL_OBJC_SCOPE
     {
-        std::string vendorString = "Google Inc.";
+        std::string desc = "Metal Renderer";
+
         if (mMetalDevice)
         {
-            vendorString += " Metal Renderer: ";
-            vendorString += mMetalDevice.get().name.UTF8String;
+            desc += ": ";
+            desc += mMetalDevice.get().name.UTF8String;
         }
 
-        return vendorString;
+        return desc;
+    }
+}
+
+std::string DisplayMtl::getVendorString()
+{
+    return GetVendorString(mMetalDeviceVendorId);
+}
+
+std::string DisplayMtl::getVersionString()
+{
+    ANGLE_MTL_OBJC_SCOPE
+    {
+        NSProcessInfo *procInfo = [NSProcessInfo processInfo];
+        return procInfo.operatingSystemVersionString.UTF8String;
     }
 }
 
@@ -420,22 +436,6 @@ egl::Error DisplayMtl::validateClientBuffer(const egl::Config *configuration,
             return egl::EglBadAttribute();
     }
     return egl::NoError();
-}
-
-std::string DisplayMtl::getRendererDescription() const
-{
-    ANGLE_MTL_OBJC_SCOPE
-    {
-        std::string desc = "Metal Renderer";
-
-        if (mMetalDevice)
-        {
-            desc += ": ";
-            desc += mMetalDevice.get().name.UTF8String;
-        }
-
-        return desc;
-    }
 }
 
 gl::Caps DisplayMtl::getNativeCaps() const

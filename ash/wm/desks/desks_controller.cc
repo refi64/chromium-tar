@@ -49,7 +49,10 @@ namespace ash {
 namespace {
 
 constexpr char kNewDeskHistogramName[] = "Ash.Desks.NewDesk2";
+// TODO(minch): Remove kDesksCountHistogramName and make the corresponding
+// histogram obsolete when Bento is fully launched.
 constexpr char kDesksCountHistogramName[] = "Ash.Desks.DesksCount2";
+constexpr char kBentoDesksCountHistogramName[] = "Ash.Desks.DesksCount3";
 constexpr char kRemoveDeskHistogramName[] = "Ash.Desks.RemoveDesk";
 constexpr char kDeskSwitchHistogramName[] = "Ash.Desks.DesksSwitch";
 constexpr char kMoveWindowFromActiveDeskHistogramName[] =
@@ -196,6 +199,12 @@ class DesksController::DeskTraversalsMetricsHelper {
       count_ += visible_desk_changes;
   }
 
+  // Fires |timer_| immediately.
+  void FireTimerForTesting() {
+    if (timer_.IsRunning())
+      timer_.FireNow();
+  }
+
  private:
   void OnTimerStop() {
     // If an animation is still running, add its current visible desk change
@@ -291,6 +300,7 @@ void DesksController::OnNewUserShown() {
 
 void DesksController::Shutdown() {
   animation_.reset();
+  desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
 }
 
 void DesksController::AddObserver(Observer* observer) {
@@ -309,15 +319,18 @@ bool DesksController::CanCreateDesks() const {
   return desks_.size() < desks_util::GetMaxNumberOfDesks();
 }
 
-Desk* DesksController::GetNextDesk() const {
-  int next_index = GetDeskIndex(GetTargetActiveDesk());
+Desk* DesksController::GetNextDesk(bool use_target_active_desk) const {
+  int next_index = use_target_active_desk ? GetDeskIndex(GetTargetActiveDesk())
+                                          : GetActiveDeskIndex();
   if (++next_index >= static_cast<int>(desks_.size()))
     return nullptr;
   return desks_[next_index].get();
 }
 
-Desk* DesksController::GetPreviousDesk() const {
-  int previous_index = GetDeskIndex(GetTargetActiveDesk());
+Desk* DesksController::GetPreviousDesk(bool use_target_active_desk) const {
+  int previous_index = use_target_active_desk
+                           ? GetDeskIndex(GetTargetActiveDesk())
+                           : GetActiveDeskIndex();
   if (--previous_index < 0)
     return nullptr;
   return desks_[previous_index].get();
@@ -362,7 +375,8 @@ void DesksController::NewDesk(DesksCreationRemovalSource source) {
   shell->shell_delegate()->DesksStateChanged(desks_.size());
 
   if (!is_first_ever_desk) {
-    desks_restore_util::UpdatePrimaryUserDesksPrefs();
+    desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
+    desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
     UMA_HISTOGRAM_ENUMERATION(kNewDeskHistogramName, source);
     ReportDesksCountHistogram();
   }
@@ -396,10 +410,62 @@ void DesksController::RemoveDesk(const Desk* desk,
 }
 
 void DesksController::ReorderDesk(int old_index, int new_index) {
+  DCHECK(features::IsBentoEnabled());
+  DCHECK_NE(old_index, new_index);
+  DCHECK_GE(old_index, 0);
+  DCHECK_GE(new_index, 0);
+  DCHECK_LT(old_index, int{desks_.size()});
+  DCHECK_LT(new_index, int{desks_.size()});
   desks_util::ReorderItem(desks_, old_index, new_index);
 
   for (auto& observer : observers_)
     observer.OnDeskReordered(old_index, new_index);
+
+  // Since multi-profile users share the same desks, the active user needs to
+  // update the desk name list to maintain the right desk order for restore
+  // and update workspaces of windows in all affected desks across all profiles.
+  // Meanwhile, only the primary user needs to update the active desk, which is
+  // independent across profiles but only recoverable for the primary user.
+
+  // 1. Update desk name and metrics lists in the user prefs to maintain the
+  // right order.
+  desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
+  desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
+
+  // 2. For multi-profile switching, update all affected active desk index in
+  // |user_to_active_desk_index_|.
+  const int starting_affected_index = std::min(old_index, new_index);
+  const int ending_affected_index = std::max(old_index, new_index);
+  // If the user move a desk to the back, other affected desks in between the
+  // two positions shift left (-1), otherwiser shift right (+1).
+  const int offset = new_index > old_index ? -1 : 1;
+
+  for (auto& iter : user_to_active_desk_index_) {
+    const int old_active_index = iter.second;
+    if (old_active_index < starting_affected_index ||
+        old_active_index > ending_affected_index) {
+      // Skip unaffected desk index.
+      continue;
+    }
+    // The moving desk changes from old_index to new_index, while other desks
+    // between the two positions shift by one position.
+    iter.second =
+        old_active_index == old_index ? new_index : old_active_index + offset;
+  }
+
+  // 3. For primary user's active desks restore, update the active desk index.
+  desks_restore_util::UpdatePrimaryUserActiveDeskPrefs(
+      user_to_active_desk_index_[Shell::Get()
+                                     ->session_controller()
+                                     ->GetPrimaryUserSession()
+                                     ->user_info.account_id]);
+
+  // 4. For restoring windows to the right desks, update workspaces of all
+  // windows in the affected desks for all simultaneously logged-in users.
+  for (int i = starting_affected_index; i <= ending_affected_index; i++) {
+    for (auto* window : desks_[i]->windows())
+      window->SetProperty(aura::client::kWindowWorkspaceKey, i);
+  }
 }
 
 void DesksController::ActivateDesk(const Desk* desk, DesksSwitchSource source) {
@@ -570,7 +636,8 @@ bool DesksController::MoveWindowFromActiveDeskTo(
           IDS_ASH_VIRTUAL_DESKS_ALERT_WINDOW_MOVED_FROM_ACTIVE_DESK,
           window->GetTitle(), active_desk_->name(), target_desk->name()));
 
-  UMA_HISTOGRAM_ENUMERATION(kMoveWindowFromActiveDeskHistogramName, source);
+  if (source != DesksMoveWindowFromActiveDeskSource::kVisibleOnAllDesks)
+    UMA_HISTOGRAM_ENUMERATION(kMoveWindowFromActiveDeskHistogramName, source);
   ReportNumberOfWindowsPerDeskHistogram();
 
   // A window moving out of the active desk cannot be active.
@@ -589,11 +656,19 @@ void DesksController::AddVisibleOnAllDesksWindow(aura::Window* window) {
   const bool added = visible_on_all_desks_windows_.emplace(window).second;
   DCHECK(added);
   NotifyAllDesksForContentChanged();
+  UMA_HISTOGRAM_ENUMERATION(
+      kMoveWindowFromActiveDeskHistogramName,
+      DesksMoveWindowFromActiveDeskSource::kVisibleOnAllDesks);
 }
 
 void DesksController::MaybeRemoveVisibleOnAllDesksWindow(aura::Window* window) {
   if (visible_on_all_desks_windows_.erase(window))
     NotifyAllDesksForContentChanged();
+}
+
+void DesksController::NotifyAllDesksForContentChanged() {
+  for (const auto& desk : desks_)
+    desk->NotifyContentChanged();
 }
 
 void DesksController::RevertDeskNameToDefault(Desk* desk) {
@@ -607,6 +682,26 @@ void DesksController::RestoreNameOfDeskAtIndex(base::string16 name,
   DCHECK_LT(index, desks_.size());
 
   desks_[index]->SetName(std::move(name), /*set_by_user=*/true);
+}
+
+void DesksController::RestoreCreationTimeOfDeskAtIndex(base::Time creation_time,
+                                                       size_t index) {
+  DCHECK_LT(index, desks_.size());
+
+  desks_[index]->set_creation_time(creation_time);
+}
+
+void DesksController::RestoreVisitedMetricsOfDeskAtIndex(int first_day_visited,
+                                                         int last_day_visited,
+                                                         size_t index) {
+  DCHECK_LT(index, desks_.size());
+  DCHECK_GE(last_day_visited, first_day_visited);
+
+  const auto& target_desk = desks_[index];
+  target_desk->set_first_day_visited(first_day_visited);
+  target_desk->set_last_day_visited(last_day_visited);
+  if (!target_desk->IsConsecutiveDailyVisit())
+    target_desk->RecordAndResetConsecutiveDailyVisits(/*being_removed=*/false);
 }
 
 void DesksController::OnRootWindowAdded(aura::Window* root_window) {
@@ -749,6 +844,10 @@ void DesksController::OnFirstSessionStarted() {
   desks_restore_util::RestorePrimaryUserDesks();
 }
 
+void DesksController::FireMetricsTimerForTesting() {
+  metrics_helper_->FireTimerForTesting();
+}
+
 void DesksController::OnAnimationFinished(DeskAnimationBase* animation) {
   DCHECK_EQ(animation_.get(), animation);
   metrics_helper_->OnAnimationFinished(animation->visible_desk_changes());
@@ -817,6 +916,11 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
 
   // Used by accessibility to indicate the desk that has been removed.
   const int removed_desk_number = std::distance(desks_.begin(), iter) + 1;
+
+  // Record |desk|'s lifetime before it's removed from |desks_|.
+  auto* non_const_desk = const_cast<Desk*>(desk);
+  non_const_desk->RecordLifetimeHistogram();
+  non_const_desk->RecordAndResetConsecutiveDailyVisits(/*being_removed=*/true);
 
   // Keep the removed desk alive until the end of this function.
   std::unique_ptr<Desk> removed_desk = std::move(*iter);
@@ -948,7 +1052,8 @@ void DesksController::RemoveDeskInternal(const Desk* desk,
           IDS_ASH_VIRTUAL_DESKS_ALERT_DESK_REMOVED, removed_desk->name(),
           active_desk_->name()));
 
-  desks_restore_util::UpdatePrimaryUserDesksPrefs();
+  desks_restore_util::UpdatePrimaryUserDeskNamesPrefs();
+  desks_restore_util::UpdatePrimaryUserDeskMetricsPrefs();
 
   DCHECK_LE(available_container_ids_.size(), desks_util::GetMaxNumberOfDesks());
 }
@@ -1005,11 +1110,6 @@ void DesksController::RestackVisibleOnAllDesksWindowsOnActiveDesk() {
                                       *closest_window_below_iter);
     }
   }
-}
-
-void DesksController::NotifyAllDesksForContentChanged() {
-  for (const auto& desk : desks_)
-    desk->NotifyContentChanged();
 }
 
 const Desk* DesksController::FindDeskOfWindow(aura::Window* window) const {
@@ -1076,8 +1176,10 @@ void DesksController::ReportNumberOfWindowsPerDeskHistogram() const {
 
 void DesksController::ReportDesksCountHistogram() const {
   DCHECK_LE(desks_.size(), desks_util::GetMaxNumberOfDesks());
-  UMA_HISTOGRAM_EXACT_LINEAR(kDesksCountHistogramName, desks_.size(),
-                             desks_util::GetMaxNumberOfDesks());
+  UMA_HISTOGRAM_EXACT_LINEAR(features::IsBentoEnabled()
+                                 ? kBentoDesksCountHistogramName
+                                 : kDesksCountHistogramName,
+                             desks_.size(), desks_util::GetMaxNumberOfDesks());
 }
 
 }  // namespace ash

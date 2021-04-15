@@ -12,6 +12,7 @@
 #include <functional>
 
 #include "libANGLE/renderer/ProgramImpl.h"
+#include "libANGLE/renderer/renderer_utils.h"
 
 namespace rx
 {
@@ -23,6 +24,8 @@ enum class GlslangError
 
 constexpr gl::ShaderMap<const char *> kDefaultUniformNames = {
     {gl::ShaderType::Vertex, sh::vk::kDefaultUniformsNameVS},
+    {gl::ShaderType::TessControl, sh::vk::kDefaultUniformsNameTCS},
+    {gl::ShaderType::TessEvaluation, sh::vk::kDefaultUniformsNameTES},
     {gl::ShaderType::Geometry, sh::vk::kDefaultUniformsNameGS},
     {gl::ShaderType::Fragment, sh::vk::kDefaultUniformsNameFS},
     {gl::ShaderType::Compute, sh::vk::kDefaultUniformsNameCS},
@@ -47,15 +50,18 @@ struct GlslangProgramInterfaceInfo
 
 struct GlslangSourceOptions
 {
-    bool useOldRewriteStructSamplers        = false;
     bool supportsTransformFeedbackExtension = false;
-    bool emulateTransformFeedback           = false;
+    bool supportsTransformFeedbackEmulation = false;
+    bool enableTransformFeedbackEmulation   = false;
     bool emulateBresenhamLines              = false;
 };
 
 struct GlslangSpirvOptions
 {
     gl::ShaderType shaderType                 = gl::ShaderType::InvalidEnum;
+    SurfaceRotation preRotation               = SurfaceRotation::Identity;
+    bool negativeViewportSupported            = false;
+    bool transformPositionToVulkanClipSpace   = false;
     bool removeEarlyFragmentTestsOptimization = false;
     bool removeDebugInfo                      = false;
     bool isTransformFeedbackStage             = false;
@@ -92,6 +98,7 @@ struct ShaderInterfaceVariableInfo
     // locations in their respective slots.
     uint32_t location  = kInvalid;
     uint32_t component = kInvalid;
+    uint32_t index     = kInvalid;
     // The stages this shader interface variable is active.
     gl::ShaderBitSet activeStages;
     // Used for transform feedback extension to decorate vertex shader output.
@@ -158,8 +165,7 @@ void GlslangRelease();
 
 bool GetImageNameWithoutIndices(std::string *name);
 
-// Get the mapped sampler name after the soure is transformed by GlslangGetShaderSource()
-std::string GetMappedSamplerNameOld(const std::string &originalName);
+// Get the mapped sampler name after the source is transformed by GlslangGetShaderSource()
 std::string GlslangGetMappedSamplerName(const std::string &originalName);
 std::string GetXfbBufferName(const uint32_t bufferIndex);
 
@@ -172,10 +178,11 @@ void GlslangGenTransformFeedbackEmulationOutputs(
     ShaderInterfaceVariableInfoMap *variableInfoMapOut);
 
 void GlslangAssignLocations(const GlslangSourceOptions &options,
-                            const gl::ProgramExecutable &programExecutable,
+                            const gl::ProgramState &programState,
                             const gl::ProgramVaryingPacking &varyingPacking,
                             const gl::ShaderType shaderType,
                             const gl::ShaderType frontShaderType,
+                            bool isTransformFeedbackStage,
                             GlslangProgramInterfaceInfo *programInterfaceInfo,
                             ShaderInterfaceVariableInfoMap *variableInfoMapOut);
 

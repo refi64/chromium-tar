@@ -21,6 +21,7 @@
 #include "components/history/core/browser/history_database_params.h"
 #include "components/history/core/browser/history_service.h"
 #include "components/history/core/test/test_history_database.h"
+#include "components/policy/core/common/mock_policy_service.h"
 #include "components/privacy_sandbox/privacy_sandbox_prefs.h"
 #include "components/sync_preferences/testing_pref_service_syncable.h"
 #include "components/ukm/test_ukm_recorder.h"
@@ -28,6 +29,7 @@
 #include "content/public/test/test_utils.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "testing/gtest/include/gtest/gtest.h"
+#include "third_party/blink/public/mojom/federated_learning/floc.mojom.h"
 
 namespace federated_learning {
 
@@ -210,7 +212,9 @@ class FlocIdProviderUnitTest : public testing::Test {
         settings_map_.get(), &prefs_, false, "chrome-extension");
 
     privacy_sandbox_settings_ = std::make_unique<PrivacySandboxSettings>(
-        settings_map_.get(), fake_cookie_settings_.get(), &prefs_);
+        settings_map_.get(), fake_cookie_settings_.get(), &prefs_,
+        &mock_policy_service_,
+        /*sync_service=*/nullptr, /*identity_manager=*/nullptr);
 
     task_environment_.RunUntilIdle();
   }
@@ -313,6 +317,7 @@ class FlocIdProviderUnitTest : public testing::Test {
 
   std::unique_ptr<history::HistoryService> history_service_;
   scoped_refptr<FakeCookieSettings> fake_cookie_settings_;
+  testing::NiceMock<policy::MockPolicyService> mock_policy_service_;
   std::unique_ptr<PrivacySandboxSettings> privacy_sandbox_settings_;
   std::unique_ptr<MockFlocIdProvider> floc_id_provider_;
 
@@ -988,7 +993,7 @@ TEST_F(FlocIdProviderSimpleFeatureParamUnitTest,
 
   set_floc_id(expected_floc);
 
-  EXPECT_EQ(expected_floc.ToStringForJsApi(),
+  EXPECT_EQ(expected_floc.ToInterestCohortForJsApi(),
             floc_id_provider_->GetInterestCohortForJsApi(
                 /*requesting_origin=*/{}, /*site_for_cookies=*/{}));
 }
@@ -1004,7 +1009,7 @@ TEST_F(FlocIdProviderSimpleFeatureParamUnitTest,
 
   set_floc_id(FlocId(123, kTime, kTime, 999));
 
-  EXPECT_EQ(std::string(),
+  EXPECT_EQ(blink::mojom::InterestCohort::New(),
             floc_id_provider_->GetInterestCohortForJsApi(
                 /*requesting_origin=*/{}, /*site_for_cookies=*/{}));
 }
@@ -1020,7 +1025,7 @@ TEST_F(FlocIdProviderSimpleFeatureParamUnitTest,
 
   set_floc_id(FlocId(123, kTime, kTime, 999));
 
-  EXPECT_EQ(std::string(),
+  EXPECT_EQ(blink::mojom::InterestCohort::New(),
             floc_id_provider_->GetInterestCohortForJsApi(
                 /*requesting_origin=*/{}, /*site_for_cookies=*/{}));
 }
@@ -1030,7 +1035,7 @@ TEST_F(FlocIdProviderSimpleFeatureParamUnitTest,
   InitializeFlocIdProvider();
   task_environment_.RunUntilIdle();
 
-  EXPECT_EQ(std::string(),
+  EXPECT_EQ(blink::mojom::InterestCohort::New(),
             floc_id_provider_->GetInterestCohortForJsApi(
                 /*requesting_origin=*/{}, /*site_for_cookies=*/{}));
 }

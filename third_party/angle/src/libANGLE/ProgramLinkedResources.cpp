@@ -59,7 +59,7 @@ LinkMismatchError LinkValidateUniforms(const sh::ShaderVariable &uniform1,
     // Validate precision match of uniforms iff they are statically used
     bool validatePrecision = uniform1.staticUse && uniform2.staticUse && validatePrecisionFeature;
     LinkMismatchError linkError = LinkValidateProgramVariables(
-        uniform1, uniform2, validatePrecision, true, mismatchedStructFieldName);
+        uniform1, uniform2, validatePrecision, false, false, mismatchedStructFieldName);
     if (linkError != LinkMismatchError::NO_MISMATCH)
     {
         return linkError;
@@ -131,6 +131,8 @@ GLuint GetMaximumShaderUniformVectors(ShaderType shaderType, const Caps &caps)
 
         case ShaderType::Compute:
         case ShaderType::Geometry:
+        case ShaderType::TessControl:
+        case ShaderType::TessEvaluation:
             return static_cast<GLuint>(caps.maxShaderUniformComponents[shaderType]) / 4;
 
         default:
@@ -361,6 +363,7 @@ struct ShaderUniformCount
     unsigned int samplerCount       = 0;
     unsigned int imageCount         = 0;
     unsigned int atomicCounterCount = 0;
+    unsigned int fragmentInOutCount = 0;
 };
 
 ShaderUniformCount &operator+=(ShaderUniformCount &lhs, const ShaderUniformCount &rhs)
@@ -369,6 +372,7 @@ ShaderUniformCount &operator+=(ShaderUniformCount &lhs, const ShaderUniformCount
     lhs.samplerCount += rhs.samplerCount;
     lhs.imageCount += rhs.imageCount;
     lhs.atomicCounterCount += rhs.atomicCounterCount;
+    lhs.fragmentInOutCount += rhs.fragmentInOutCount;
     return lhs;
 }
 
@@ -384,6 +388,7 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
                           std::vector<LinkedUniform> *samplerUniforms,
                           std::vector<LinkedUniform> *imageUniforms,
                           std::vector<LinkedUniform> *atomicCounterUniforms,
+                          std::vector<LinkedUniform> *inputAttachmentUniforms,
                           std::vector<UnusedUniform> *unusedUniforms)
         : sh::VariableNameVisitor("", ""),
           mShaderType(shaderType),
@@ -396,15 +401,16 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
           mSamplerUniforms(samplerUniforms),
           mImageUniforms(imageUniforms),
           mAtomicCounterUniforms(atomicCounterUniforms),
+          mInputAttachmentUniforms(inputAttachmentUniforms),
           mUnusedUniforms(unusedUniforms)
     {}
 
-    void visitNamedSamplerOrImage(const sh::ShaderVariable &sampler,
-                                  const std::string &name,
-                                  const std::string &mappedName,
-                                  const std::vector<unsigned int> &arraySizes) override
+    void visitNamedOpaqueObject(const sh::ShaderVariable &variable,
+                                const std::string &name,
+                                const std::string &mappedName,
+                                const std::vector<unsigned int> &arraySizes) override
     {
-        visitNamedVariable(sampler, false, name, mappedName, arraySizes);
+        visitNamedVariable(variable, false, name, mappedName, arraySizes);
     }
 
     void visitNamedVariable(const sh::ShaderVariable &variable,
@@ -416,6 +422,7 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
         bool isSampler                          = IsSamplerType(variable.type);
         bool isImage                            = IsImageType(variable.type);
         bool isAtomicCounter                    = IsAtomicCounterType(variable.type);
+        bool isFragmentInOut                    = variable.isFragmentInOut;
         std::vector<LinkedUniform> *uniformList = mUniforms;
         if (isSampler)
         {
@@ -428,6 +435,10 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
         else if (isAtomicCounter)
         {
             uniformList = mAtomicCounterUniforms;
+        }
+        else if (isFragmentInOut)
+        {
+            uniformList = mInputAttachmentUniforms;
         }
 
         std::string fullNameWithArrayIndex(name);
@@ -477,6 +488,7 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
             linkedUniform.outerArraySizes     = arraySizes;
             linkedUniform.texelFetchStaticUse = variable.texelFetchStaticUse;
             linkedUniform.imageUnitFormat     = variable.imageUnitFormat;
+            linkedUniform.isFragmentInOut     = variable.isFragmentInOut;
             if (variable.hasParentArrayIndex())
             {
                 linkedUniform.setParentArrayIndex(variable.parentArrayIndex());
@@ -487,9 +499,9 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
             }
             else
             {
-                mUnusedUniforms->emplace_back(linkedUniform.name, linkedUniform.isSampler(),
-                                              linkedUniform.isImage(),
-                                              linkedUniform.isAtomicCounter());
+                mUnusedUniforms->emplace_back(
+                    linkedUniform.name, linkedUniform.isSampler(), linkedUniform.isImage(),
+                    linkedUniform.isAtomicCounter(), linkedUniform.isFragmentInOut);
             }
 
             uniformList->push_back(linkedUniform);
@@ -500,7 +512,7 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
         // Samplers and images aren't "real" uniforms, so they don't count towards register usage.
         // Likewise, don't count "real" uniforms towards opaque count.
 
-        if (!IsOpaqueType(variable.type))
+        if (!IsOpaqueType(variable.type) && !isFragmentInOut)
         {
             mUniformCount.vectorCount += VariableRegisterCount(variable.type) * elementCount;
         }
@@ -508,6 +520,7 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
         mUniformCount.samplerCount += (isSampler ? elementCount : 0);
         mUniformCount.imageCount += (isImage ? elementCount : 0);
         mUniformCount.atomicCounterCount += (isAtomicCounter ? elementCount : 0);
+        mUniformCount.fragmentInOutCount += (isFragmentInOut ? elementCount : 0);
 
         if (mLocation != -1)
         {
@@ -545,6 +558,7 @@ class FlattenUniformVisitor : public sh::VariableNameVisitor
     std::vector<LinkedUniform> *mSamplerUniforms;
     std::vector<LinkedUniform> *mImageUniforms;
     std::vector<LinkedUniform> *mAtomicCounterUniforms;
+    std::vector<LinkedUniform> *mInputAttachmentUniforms;
     std::vector<UnusedUniform> *mUnusedUniforms;
     ShaderUniformCount mUniformCount;
     unsigned int mStructStackSize = 0;
@@ -678,35 +692,29 @@ void GetFilteredVaryings(const std::vector<sh::ShaderVariable> &varyings,
 LinkMismatchError LinkValidateVaryings(const sh::ShaderVariable &outputVarying,
                                        const sh::ShaderVariable &inputVarying,
                                        int shaderVersion,
-                                       bool validateGeometryShaderInputVarying,
+                                       ShaderType frontShaderType,
+                                       ShaderType backShaderType,
                                        bool isSeparable,
                                        std::string *mismatchedStructFieldName)
 {
-    if (validateGeometryShaderInputVarying)
-    {
-        // [GL_EXT_geometry_shader] Section 11.1gs.4.3:
-        // The OpenGL ES Shading Language doesn't support multi-dimensional arrays as shader inputs
-        // or outputs.
-        ASSERT(inputVarying.arraySizes.size() == 1u);
-
-        // Geometry shader input varyings are not treated as arrays, so a vertex array output
-        // varying cannot match a geometry shader input varying.
-        // [GL_EXT_geometry_shader] Section 7.4.1:
-        // Geometry shader per-vertex input variables and blocks are required to be declared as
-        // arrays, with each element representing input or output values for a single vertex of a
-        // multi-vertex primitive. For the purposes of interface matching, such variables and blocks
-        // are treated as though they were not declared as arrays.
-        if (outputVarying.isArray())
-        {
-            return LinkMismatchError::ARRAY_SIZE_MISMATCH;
-        }
-    }
+    // [ES 3.2 spec] 7.4.1 Shader Interface Matching:
+    // Tessellation control shader per-vertex output variables and blocks and tessellation control,
+    // tessellation evaluation, and geometry shader per-vertex input variables and blocks are
+    // required to be declared as arrays, with each element representing input or output values for
+    // a single vertex of a multi-vertex primitive. For the purposes of interface matching, such
+    // variables and blocks are treated as though they were not declared as arrays.
+    bool treatOutputAsNonArray =
+        (frontShaderType == ShaderType::TessControl && !outputVarying.isPatch);
+    bool treatInputAsNonArray =
+        ((backShaderType == ShaderType::TessControl ||
+          backShaderType == ShaderType::TessEvaluation || backShaderType == ShaderType::Geometry) &&
+         !inputVarying.isPatch);
 
     // Skip the validation on the array sizes between a vertex output varying and a geometry input
     // varying as it has been done before.
     bool validatePrecision      = isSeparable && (shaderVersion > 100);
     LinkMismatchError linkError = LinkValidateProgramVariables(
-        outputVarying, inputVarying, validatePrecision, !validateGeometryShaderInputVarying,
+        outputVarying, inputVarying, validatePrecision, treatOutputAsNonArray, treatInputAsNonArray,
         mismatchedStructFieldName);
     if (linkError != LinkMismatchError::NO_MISMATCH)
     {
@@ -733,12 +741,11 @@ LinkMismatchError LinkValidateVaryings(const sh::ShaderVariable &outputVarying,
     return LinkMismatchError::NO_MISMATCH;
 }
 
-bool DoShaderVariablesMatch(int outputShaderVersion,
-                            ShaderType outputShaderType,
-                            ShaderType inputShaderType,
+bool DoShaderVariablesMatch(int frontShaderVersion,
+                            ShaderType frontShaderType,
+                            ShaderType backShaderType,
                             const sh::ShaderVariable &input,
                             const sh::ShaderVariable &output,
-                            bool validateGeometryShaderInputs,
                             bool isSeparable,
                             gl::InfoLog &infoLog)
 {
@@ -768,12 +775,12 @@ bool DoShaderVariablesMatch(int outputShaderVersion,
     {
         std::string mismatchedStructFieldName;
         LinkMismatchError linkError =
-            LinkValidateVaryings(output, input, outputShaderVersion, validateGeometryShaderInputs,
+            LinkValidateVaryings(output, input, frontShaderVersion, frontShaderType, backShaderType,
                                  isSeparable, &mismatchedStructFieldName);
         if (linkError != LinkMismatchError::NO_MISMATCH)
         {
             LogLinkMismatch(infoLog, input.name, "varying", linkError, mismatchedStructFieldName,
-                            outputShaderType, inputShaderType);
+                            frontShaderType, backShaderType);
             return false;
         }
 
@@ -893,7 +900,7 @@ bool UniformLinker::indexUniforms(InfoLog &infoLog,
         const LinkedUniform &uniform = mUniforms[uniformIndex];
 
         if ((uniform.isBuiltIn() && !uniform.isEmulatedBuiltIn()) ||
-            IsAtomicCounterType(uniform.type))
+            IsAtomicCounterType(uniform.type) || uniform.isFragmentInOut)
         {
             continue;
         }
@@ -969,8 +976,10 @@ bool UniformLinker::gatherUniformLocationsAndCheckConflicts(
 
     for (const LinkedUniform &uniform : mUniforms)
     {
-        if (uniform.isBuiltIn() && !uniform.isEmulatedBuiltIn())
+        if ((uniform.isBuiltIn() && !uniform.isEmulatedBuiltIn()) || uniform.isFragmentInOut)
         {
+            // The uniform of the fragment inout is not a normal uniform type. So, in the case of
+            // the fragment inout, this routine should be skipped.
             continue;
         }
 
@@ -1042,7 +1051,8 @@ void UniformLinker::pruneUnusedUniforms()
         else
         {
             mUnusedUniforms.emplace_back(uniformIter->name, uniformIter->isSampler(),
-                                         uniformIter->isImage(), uniformIter->isAtomicCounter());
+                                         uniformIter->isImage(), uniformIter->isAtomicCounter(),
+                                         uniformIter->isFragmentInOut);
             uniformIter = mUniforms.erase(uniformIter);
         }
     }
@@ -1054,6 +1064,7 @@ bool UniformLinker::flattenUniformsAndCheckCapsForShader(
     std::vector<LinkedUniform> &samplerUniforms,
     std::vector<LinkedUniform> &imageUniforms,
     std::vector<LinkedUniform> &atomicCounterUniforms,
+    std::vector<LinkedUniform> &inputAttachmentUniforms,
     std::vector<UnusedUniform> &unusedUniforms,
     InfoLog &infoLog)
 {
@@ -1061,7 +1072,8 @@ bool UniformLinker::flattenUniformsAndCheckCapsForShader(
     for (const sh::ShaderVariable &uniform : shader->getUniforms())
     {
         FlattenUniformVisitor flattener(shader->getType(), uniform, &mUniforms, &samplerUniforms,
-                                        &imageUniforms, &atomicCounterUniforms, &unusedUniforms);
+                                        &imageUniforms, &atomicCounterUniforms,
+                                        &inputAttachmentUniforms, &unusedUniforms);
         sh::TraverseShaderVariable(uniform, false, &flattener);
 
         if (uniform.active)
@@ -1072,7 +1084,7 @@ bool UniformLinker::flattenUniformsAndCheckCapsForShader(
         {
             unusedUniforms.emplace_back(uniform.name, IsSamplerType(uniform.type),
                                         IsImageType(uniform.type),
-                                        IsAtomicCounterType(uniform.type));
+                                        IsAtomicCounterType(uniform.type), uniform.isFragmentInOut);
         }
     }
 
@@ -1130,6 +1142,7 @@ bool UniformLinker::flattenUniformsAndCheckCaps(const Caps &caps, InfoLog &infoL
     std::vector<LinkedUniform> samplerUniforms;
     std::vector<LinkedUniform> imageUniforms;
     std::vector<LinkedUniform> atomicCounterUniforms;
+    std::vector<LinkedUniform> inputAttachmentUniforms;
     std::vector<UnusedUniform> unusedUniforms;
 
     for (const ShaderType shaderType : AllShaderTypes())
@@ -1141,7 +1154,8 @@ bool UniformLinker::flattenUniformsAndCheckCaps(const Caps &caps, InfoLog &infoL
         }
 
         if (!flattenUniformsAndCheckCapsForShader(shader, caps, samplerUniforms, imageUniforms,
-                                                  atomicCounterUniforms, unusedUniforms, infoLog))
+                                                  atomicCounterUniforms, inputAttachmentUniforms,
+                                                  unusedUniforms, infoLog))
         {
             return false;
         }
@@ -1150,6 +1164,8 @@ bool UniformLinker::flattenUniformsAndCheckCaps(const Caps &caps, InfoLog &infoL
     mUniforms.insert(mUniforms.end(), samplerUniforms.begin(), samplerUniforms.end());
     mUniforms.insert(mUniforms.end(), imageUniforms.begin(), imageUniforms.end());
     mUniforms.insert(mUniforms.end(), atomicCounterUniforms.begin(), atomicCounterUniforms.end());
+    mUniforms.insert(mUniforms.end(), inputAttachmentUniforms.begin(),
+                     inputAttachmentUniforms.end());
     mUnusedUniforms.insert(mUnusedUniforms.end(), unusedUniforms.begin(), unusedUniforms.end());
     return true;
 }
@@ -1608,18 +1624,17 @@ bool LinkValidateProgramGlobalNames(InfoLog &infoLog, const HasAttachedShaders &
 // [OpenGL ES 3.2] Chapter 7.4.1 "Shader Interface Matching"
 bool LinkValidateShaderInterfaceMatching(const std::vector<sh::ShaderVariable> &outputVaryings,
                                          const std::vector<sh::ShaderVariable> &inputVaryings,
-                                         ShaderType outputShaderType,
-                                         ShaderType inputShaderType,
-                                         int outputShaderVersion,
-                                         int inputShaderVersion,
+                                         ShaderType frontShaderType,
+                                         ShaderType backShaderType,
+                                         int frontShaderVersion,
+                                         int backShaderVersion,
                                          bool isSeparable,
                                          gl::InfoLog &infoLog)
 {
-    ASSERT(outputShaderVersion == inputShaderVersion);
+    ASSERT(frontShaderVersion == backShaderVersion);
 
     std::vector<const sh::ShaderVariable *> filteredInputVaryings;
     std::vector<const sh::ShaderVariable *> filteredOutputVaryings;
-    bool validateGeometryShaderInputs = inputShaderType == ShaderType::Geometry;
 
     GetFilteredVaryings(inputVaryings, &filteredInputVaryings);
     GetFilteredVaryings(outputVaryings, &filteredOutputVaryings);
@@ -1627,16 +1642,16 @@ bool LinkValidateShaderInterfaceMatching(const std::vector<sh::ShaderVariable> &
     // Separable programs require the number of inputs and outputs match
     if (isSeparable && filteredInputVaryings.size() < filteredOutputVaryings.size())
     {
-        infoLog << GetShaderTypeString(inputShaderType)
+        infoLog << GetShaderTypeString(backShaderType)
                 << " does not consume all varyings generated by "
-                << GetShaderTypeString(outputShaderType);
+                << GetShaderTypeString(frontShaderType);
         return false;
     }
     if (isSeparable && filteredInputVaryings.size() > filteredOutputVaryings.size())
     {
-        infoLog << GetShaderTypeString(outputShaderType)
+        infoLog << GetShaderTypeString(frontShaderType)
                 << " does not generate all varyings consumed by "
-                << GetShaderTypeString(inputShaderType);
+                << GetShaderTypeString(backShaderType);
         return false;
     }
 
@@ -1646,9 +1661,8 @@ bool LinkValidateShaderInterfaceMatching(const std::vector<sh::ShaderVariable> &
         bool match = false;
         for (const sh::ShaderVariable *output : filteredOutputVaryings)
         {
-            if (DoShaderVariablesMatch(outputShaderVersion, outputShaderType, inputShaderType,
-                                       *input, *output, validateGeometryShaderInputs, isSeparable,
-                                       infoLog))
+            if (DoShaderVariablesMatch(frontShaderVersion, frontShaderType, backShaderType, *input,
+                                       *output, isSeparable, infoLog))
             {
                 match = true;
                 break;
@@ -1660,10 +1674,10 @@ bool LinkValidateShaderInterfaceMatching(const std::vector<sh::ShaderVariable> &
         // if it is not active. GLSL ES 3.00.6 section 4.3.10.
         if (!match && input->staticUse)
         {
-            const std::string &name = input->isShaderIOBlock ? input->structName : input->name;
-            infoLog << GetShaderTypeString(inputShaderType) << " varying " << name
-                    << " does not match any " << GetShaderTypeString(outputShaderType)
-                    << " varying";
+            const std::string &name =
+                input->isShaderIOBlock ? input->structOrBlockName : input->name;
+            infoLog << GetShaderTypeString(backShaderType) << " varying " << name
+                    << " does not match any " << GetShaderTypeString(frontShaderType) << " varying";
             return false;
         }
     }
@@ -1674,14 +1688,34 @@ bool LinkValidateShaderInterfaceMatching(const std::vector<sh::ShaderVariable> &
 LinkMismatchError LinkValidateProgramVariables(const sh::ShaderVariable &variable1,
                                                const sh::ShaderVariable &variable2,
                                                bool validatePrecision,
-                                               bool validateArraySize,
+                                               bool treatVariable1AsNonArray,
+                                               bool treatVariable2AsNonArray,
                                                std::string *mismatchedStructOrBlockMemberName)
 {
     if (variable1.type != variable2.type)
     {
         return LinkMismatchError::TYPE_MISMATCH;
     }
-    if (validateArraySize && variable1.arraySizes != variable2.arraySizes)
+
+    bool variable1IsArray = variable1.isArray();
+    bool variable2IsArray = variable2.isArray();
+    if (treatVariable1AsNonArray)
+    {
+        ASSERT(variable1IsArray);
+        variable1IsArray = false;
+    }
+    if (treatVariable2AsNonArray)
+    {
+        ASSERT(variable2IsArray);
+        variable2IsArray = false;
+    }
+    // TODO(anglebug.com/5557): Investigate interactions with arrays-of-arrays.
+    if (variable1IsArray != variable2IsArray)
+    {
+        return LinkMismatchError::ARRAYNESS_MISMATCH;
+    }
+    if (!treatVariable1AsNonArray && !treatVariable2AsNonArray &&
+        variable1.arraySizes != variable2.arraySizes)
     {
         return LinkMismatchError::ARRAY_SIZE_MISMATCH;
     }
@@ -1690,7 +1724,7 @@ LinkMismatchError LinkValidateProgramVariables(const sh::ShaderVariable &variabl
         return LinkMismatchError::PRECISION_MISMATCH;
     }
     if (!variable1.isShaderIOBlock && !variable2.isShaderIOBlock &&
-        variable1.structName != variable2.structName)
+        variable1.structOrBlockName != variable2.structOrBlockName)
     {
         return LinkMismatchError::STRUCT_NAME_MISMATCH;
     }
@@ -1726,14 +1760,14 @@ LinkMismatchError LinkValidateProgramVariables(const sh::ShaderVariable &variabl
                 return LinkMismatchError::FIELD_LOCATION_MISMATCH;
             }
 
-            if (member1.structName != member2.structName)
+            if (member1.structOrBlockName != member2.structOrBlockName)
             {
                 return LinkMismatchError::FIELD_STRUCT_NAME_MISMATCH;
             }
         }
 
         LinkMismatchError linkErrorOnField = LinkValidateProgramVariables(
-            member1, member2, validatePrecision, true, mismatchedStructOrBlockMemberName);
+            member1, member2, validatePrecision, false, false, mismatchedStructOrBlockMemberName);
         if (linkErrorOnField != LinkMismatchError::NO_MISMATCH)
         {
             AddProgramVariableParentPrefix(member1.name, mismatchedStructOrBlockMemberName);
@@ -1759,17 +1793,11 @@ void AddProgramVariableParentPrefix(const std::string &parentName, std::string *
     }
 }
 
-bool LinkValidateBuiltInVaryings(const std::vector<sh::ShaderVariable> &vertexVaryings,
-                                 const std::vector<sh::ShaderVariable> &fragmentVaryings,
-                                 int vertexShaderVersion,
-                                 InfoLog &infoLog)
+bool LinkValidateBuiltInVaryingsInvariant(const std::vector<sh::ShaderVariable> &vertexVaryings,
+                                          const std::vector<sh::ShaderVariable> &fragmentVaryings,
+                                          int vertexShaderVersion,
+                                          InfoLog &infoLog)
 {
-    if (vertexShaderVersion != 100)
-    {
-        // Only ESSL 1.0 has restrictions on matching input and output invariance
-        return true;
-    }
-
     bool glPositionIsInvariant   = false;
     bool glPointSizeIsInvariant  = false;
     bool glFragCoordIsInvariant  = false;
@@ -1824,6 +1852,71 @@ bool LinkValidateBuiltInVaryings(const std::vector<sh::ShaderVariable> &vertexVa
         return false;
     }
 
+    return true;
+}
+
+bool LinkValidateBuiltInVaryings(const std::vector<sh::ShaderVariable> &outputVaryings,
+                                 const std::vector<sh::ShaderVariable> &inputVaryings,
+                                 ShaderType outputShaderType,
+                                 ShaderType inputShaderType,
+                                 int outputShaderVersion,
+                                 int inputShaderVersion,
+                                 InfoLog &infoLog)
+{
+    ASSERT(outputShaderVersion == inputShaderVersion);
+
+    // Only ESSL 1.0 has restrictions on matching input and output invariance
+    if (inputShaderVersion == 100 && outputShaderType == ShaderType::Vertex &&
+        inputShaderType == ShaderType::Fragment)
+    {
+        return LinkValidateBuiltInVaryingsInvariant(outputVaryings, inputVaryings,
+                                                    outputShaderVersion, infoLog);
+    }
+
+    uint32_t sizeClipDistance = 0;
+    uint32_t sizeCullDistance = 0;
+
+    for (const sh::ShaderVariable &varying : outputVaryings)
+    {
+        if (!varying.isBuiltIn())
+        {
+            continue;
+        }
+        if (varying.name.compare("gl_ClipDistance") == 0)
+        {
+            sizeClipDistance = varying.getOutermostArraySize();
+        }
+        else if (varying.name.compare("gl_CullDistance") == 0)
+        {
+            sizeCullDistance = varying.getOutermostArraySize();
+        }
+    }
+
+    for (const sh::ShaderVariable &varying : inputVaryings)
+    {
+        if (!varying.isBuiltIn())
+        {
+            continue;
+        }
+        if (varying.name.compare("gl_ClipDistance") == 0)
+        {
+            if (sizeClipDistance != varying.getOutermostArraySize())
+            {
+                infoLog << "If either shader redeclares the built-in arrays gl_ClipDistance[] the "
+                           "array must have the same size in both shaders.";
+                return false;
+            }
+        }
+        else if (varying.name.compare("gl_CullDistance") == 0)
+        {
+            if (sizeCullDistance != varying.getOutermostArraySize())
+            {
+                infoLog << "If either shader redeclares the built-in arrays gl_CullDistance[] the "
+                           "array must have the same size in both shaders.";
+                return false;
+            }
+        }
+    }
     return true;
 }
 }  // namespace gl

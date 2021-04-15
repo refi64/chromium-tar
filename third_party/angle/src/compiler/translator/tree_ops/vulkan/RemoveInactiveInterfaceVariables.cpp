@@ -102,7 +102,8 @@ bool RemoveInactiveInterfaceVariablesTraverser::visitDeclaration(Visit visit,
         // When a member has an explicit location, interface block should not be removed.
         // If the member or interface would be removed, GetProgramResource could not return the
         // location.
-        if (!IsShaderIoBlock(type.getQualifier()))
+        if (!IsShaderIoBlock(type.getQualifier()) && type.getQualifier() != EvqPatchIn &&
+            type.getQualifier() != EvqPatchOut)
         {
             removeDeclaration =
                 !IsVariableActive(mInterfaceBlocks, type.getInterfaceBlock()->name());
@@ -128,7 +129,8 @@ bool RemoveInactiveInterfaceVariablesTraverser::visitDeclaration(Visit visit,
     if (removeDeclaration)
     {
         TIntermSequence emptySequence;
-        mMultiReplacements.emplace_back(getParentNode()->getAsBlock(), node, emptySequence);
+        mMultiReplacements.emplace_back(getParentNode()->getAsBlock(), node,
+                                        std::move(emptySequence));
     }
 
     return false;

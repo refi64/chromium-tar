@@ -81,8 +81,8 @@ struct TransformFeedbackVarying : public sh::ShaderVariable
             name       = parent.name + "." + name;
             mappedName = parent.mappedName + "." + mappedName;
         }
-        structName       = parent.structName;
-        mappedStructName = parent.mappedStructName;
+        structOrBlockName       = parent.structOrBlockName;
+        mappedStructOrBlockName = parent.mappedStructOrBlockName;
     }
 
     std::string nameWithArrayIndex() const
@@ -157,6 +157,13 @@ class ProgramExecutable final : public angle::Subject
         return isCompute() ? mLinkedComputeShaderStages.count()
                            : mLinkedGraphicsShaderStages.count();
     }
+    bool hasLinkedTessellationShader() const
+    {
+        return mLinkedGraphicsShaderStages[ShaderType::TessControl] ||
+               mLinkedGraphicsShaderStages[ShaderType::TessEvaluation];
+    }
+
+    ShaderType getTransformFeedbackStage() const;
 
     ShaderType getLinkedTransformFeedbackStage() const;
 
@@ -216,6 +223,7 @@ class ProgramExecutable final : public angle::Subject
     {
         return !getLinkedTransformFeedbackVaryings().empty();
     }
+    bool usesFramebufferFetch() const;
 
     // Count the number of uniform and storage buffer declarations, counting arrays as one.
     size_t getTransformFeedbackBufferCount() const { return mTransformFeedbackStrides.size(); }
@@ -226,8 +234,16 @@ class ProgramExecutable final : public angle::Subject
     const std::vector<sh::ShaderVariable> &getProgramInputs() const { return mProgramInputs; }
     const std::vector<sh::ShaderVariable> &getOutputVariables() const { return mOutputVariables; }
     const std::vector<VariableLocation> &getOutputLocations() const { return mOutputLocations; }
+    const std::vector<VariableLocation> &getSecondaryOutputLocations() const
+    {
+        return mSecondaryOutputLocations;
+    }
     const std::vector<LinkedUniform> &getUniforms() const { return mUniforms; }
     const std::vector<InterfaceBlock> &getUniformBlocks() const { return mUniformBlocks; }
+    const UniformBlockBindingMask &getActiveUniformBlockBindings() const
+    {
+        return mActiveUniformBlockBindings;
+    }
     const std::vector<SamplerBinding> &getSamplerBindings() const { return mSamplerBindings; }
     const std::vector<ImageBinding> &getImageBindings() const
     {
@@ -240,6 +256,7 @@ class ProgramExecutable final : public angle::Subject
     const RangeUI &getDefaultUniformRange() const { return mDefaultUniformRange; }
     const RangeUI &getSamplerUniformRange() const { return mSamplerUniformRange; }
     const RangeUI &getImageUniformRange() const { return mImageUniformRange; }
+    const RangeUI &getFragmentInoutRange() const { return mFragmentInoutRange; }
     const std::vector<TransformFeedbackVarying> &getLinkedTransformFeedbackVaryings() const
     {
         return mLinkedTransformFeedbackVaryings;
@@ -321,6 +338,8 @@ class ProgramExecutable final : public angle::Subject
 
     int getGeometryShaderMaxVertices() const { return mGeometryShaderMaxVertices; }
 
+    GLenum getTessGenMode() const { return mTessGenMode; }
+
   private:
     // TODO(timvp): http://anglebug.com/3570: Investigate removing these friend
     // class declarations and accessing the necessary members with getters/setters.
@@ -383,6 +402,8 @@ class ProgramExecutable final : public angle::Subject
     // to uniforms.
     std::vector<sh::ShaderVariable> mOutputVariables;
     std::vector<VariableLocation> mOutputLocations;
+    // EXT_blend_func_extended secondary outputs (ones with index 1)
+    std::vector<VariableLocation> mSecondaryOutputLocations;
     bool mYUVOutput;
     // Vertex attributes, Fragment input varyings, etc.
     std::vector<sh::ShaderVariable> mProgramInputs;
@@ -395,7 +416,8 @@ class ProgramExecutable final : public angle::Subject
     //  2. Sampler uniforms
     //  3. Image uniforms
     //  4. Atomic counter uniforms
-    //  5. Uniform block uniforms
+    //  5. Subpass Input uniforms (Only for Vulkan)
+    //  6. Uniform block uniforms
     // This makes opaque uniform validation easier, since we don't need a separate list.
     // For generating the entries and naming them we follow the spec: GLES 3.1 November 2016 section
     // 7.3.1.1 Naming Active Resources. There's a separate entry for each struct member and each
@@ -405,10 +427,15 @@ class ProgramExecutable final : public angle::Subject
     RangeUI mDefaultUniformRange;
     RangeUI mSamplerUniformRange;
     std::vector<InterfaceBlock> mUniformBlocks;
+
+    // For faster iteration on the blocks currently being bound.
+    UniformBlockBindingMask mActiveUniformBlockBindings;
+
     std::vector<AtomicCounterBuffer> mAtomicCounterBuffers;
     RangeUI mImageUniformRange;
     std::vector<InterfaceBlock> mComputeShaderStorageBlocks;
     std::vector<InterfaceBlock> mGraphicsShaderStorageBlocks;
+    RangeUI mFragmentInoutRange;
 
     // An array of the samplers that are used by the program
     std::vector<SamplerBinding> mSamplerBindings;
@@ -443,6 +470,13 @@ class ProgramExecutable final : public angle::Subject
     PrimitiveMode mGeometryShaderOutputPrimitiveType;
     int mGeometryShaderInvocations;
     int mGeometryShaderMaxVertices;
+
+    // GL_EXT_tessellation_shader
+    int mTessControlShaderVertices;
+    GLenum mTessGenMode;
+    GLenum mTessGenSpacing;
+    GLenum mTessGenVertexOrder;
+    GLenum mTessGenPointMode;
 };
 }  // namespace gl
 

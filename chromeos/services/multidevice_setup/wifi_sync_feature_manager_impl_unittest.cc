@@ -6,6 +6,7 @@
 
 #include <memory>
 
+#include "ash/constants/ash_features.h"
 #include "base/containers/flat_map.h"
 #include "base/macros.h"
 #include "base/optional.h"
@@ -16,7 +17,6 @@
 #include "chromeos/components/multidevice/remote_device_test_util.h"
 #include "chromeos/components/multidevice/software_feature.h"
 #include "chromeos/components/multidevice/software_feature_state.h"
-#include "chromeos/constants/chromeos_features.h"
 #include "chromeos/services/device_sync/public/cpp/fake_device_sync_client.h"
 #include "chromeos/services/multidevice_setup/fake_account_status_change_delegate.h"
 #include "chromeos/services/multidevice_setup/fake_account_status_change_delegate_notifier.h"
@@ -90,6 +90,12 @@ class MultiDeviceSetupWifiSyncFeatureManagerImplTest
         ->SetAccountStatusChangeDelegateRemote(
             fake_account_status_change_delegate_->GenerateRemote());
     fake_account_status_change_delegate_notifier_->FlushForTesting();
+    multidevice::RemoteDeviceRef local_device =
+        multidevice::CreateRemoteDeviceRefForTest();
+    GetMutableRemoteDevice(local_device)
+        ->software_features[multidevice::SoftwareFeature::kWifiSyncClient] =
+        multidevice::SoftwareFeatureState::kSupported;
+    fake_device_sync_client_->set_local_device_metadata(local_device);
   }
 
   void TearDown() override {}

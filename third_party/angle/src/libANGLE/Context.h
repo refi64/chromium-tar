@@ -247,7 +247,7 @@ class StateCache final : angle::NonCopyable
 
     // Places that can trigger updateActiveImageUnitIndices:
     // 1. onProgramExecutableChange.
-    ImageUnitMask getActiveImageUnitIndices() const { return mCachedActiveImageUnitIndices; }
+    const ImageUnitMask &getActiveImageUnitIndices() const { return mCachedActiveImageUnitIndices; }
 
     // Places that can trigger updateCanDraw:
     // 1. onProgramExecutableChange.
@@ -289,7 +289,12 @@ class StateCache final : angle::NonCopyable
     void updateActiveImageUnitIndices(Context *context);
     void updateCanDraw(Context *context);
 
-    void setValidDrawModes(bool pointsOK, bool linesOK, bool trisOK, bool lineAdjOK, bool triAdjOK);
+    void setValidDrawModes(bool pointsOK,
+                           bool linesOK,
+                           bool trisOK,
+                           bool lineAdjOK,
+                           bool triAdjOK,
+                           bool patchOK);
 
     intptr_t getBasicDrawStatesErrorImpl(const Context *context) const;
     intptr_t getBasicDrawElementsErrorImpl(const Context *context) const;
@@ -348,6 +353,8 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
     // Use for debugging.
     ContextID id() const { return mState.getContextID(); }
 
+    egl::Error initialize();
+
     egl::Error onDestroy(const egl::Display *display);
     ~Context() override;
 
@@ -405,6 +412,10 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
 
     bool isVertexArrayGenerated(VertexArrayID vertexArray) const;
     bool isTransformFeedbackGenerated(TransformFeedbackID transformFeedback) const;
+
+    bool isExternal() const { return mIsExternal; }
+    bool saveAndRestoreState() const { return mSaveAndRestoreState; }
+    bool isCurrent() const { return mIsCurrent; }
 
     void getBooleanvImpl(GLenum pname, GLboolean *params) const;
     void getFloatvImpl(GLenum pname, GLfloat *params) const;
@@ -607,8 +618,11 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
 
     egl::ShareGroup *getShareGroup() const { return mState.getShareGroup(); }
 
+    bool supportsGeometryOrTesselation() const;
+    void dirtyAllState();
+
   private:
-    void initialize();
+    void initializeDefaultResources();
 
     angle::Result prepareForDraw(PrimitiveMode mode);
     angle::Result prepareForClear(GLbitfield mask);
@@ -771,6 +785,11 @@ class Context final : public egl::LabeledObject, angle::NonCopyable, public angl
     mutable size_t mRefCount;
 
     OverlayType mOverlay;
+
+    const bool mIsExternal;
+    const bool mSaveAndRestoreState;
+
+    bool mIsCurrent;
 };
 
 // Thread-local current valid context bound to the thread.

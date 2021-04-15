@@ -85,8 +85,10 @@ SkColor RenderWidgetHostViewMac::BrowserCompositorMacGetGutterColor() const {
   return last_frame_root_background_color_;
 }
 
-void RenderWidgetHostViewMac::OnFrameTokenChanged(uint32_t frame_token) {
-  OnFrameTokenChangedForView(frame_token);
+void RenderWidgetHostViewMac::OnFrameTokenChanged(
+    uint32_t frame_token,
+    base::TimeTicks activation_time) {
+  OnFrameTokenChangedForView(frame_token, activation_time);
 }
 
 void RenderWidgetHostViewMac::DestroyCompositorForShutdown() {
@@ -670,7 +672,8 @@ void RenderWidgetHostViewMac::OnGestureEvent(
   }
 }
 
-void RenderWidgetHostViewMac::OnRenderFrameMetadataChangedAfterActivation() {
+void RenderWidgetHostViewMac::OnRenderFrameMetadataChangedAfterActivation(
+    base::TimeTicks activation_time) {
   last_frame_root_background_color_ = host()
                                           ->render_frame_metadata_provider()
                                           ->LastRenderFrameMetadata()
@@ -1499,6 +1502,7 @@ void RenderWidgetHostViewMac::OnWindowFrameInScreenChanged(
 void RenderWidgetHostViewMac::OnDisplayChanged(
     const display::Display& display) {
   display_ = display;
+  // TODO(crbug.com/1169291): Unify per-platform DisplayObserver instances.
   UpdateNSViewAndDisplayProperties();
 }
 

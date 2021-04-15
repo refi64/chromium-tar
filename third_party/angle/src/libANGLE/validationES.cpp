@@ -249,7 +249,8 @@ bool ValidateTextureWrapModeValue(const Context *context,
             break;
 
         case GL_CLAMP_TO_BORDER:
-            if (!context->getExtensions().textureBorderClampOES)
+            if (!context->getExtensions().textureBorderClampOES &&
+                context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kExtensionNotEnabled);
                 return false;
@@ -727,12 +728,30 @@ bool ValidateTransformFeedbackPrimitiveMode(const Context *context,
 {
     ASSERT(context);
 
-    if (!context->getExtensions().geometryShader)
+    if ((!context->getExtensions().geometryShader ||
+         !context->getExtensions().tessellationShaderEXT) &&
+        context->getClientVersion() < ES_3_2)
     {
         // It is an invalid operation to call DrawArrays or DrawArraysInstanced with a draw mode
         // that does not match the current transform feedback object's draw mode (if transform
         // feedback is active), (3.0.2, section 2.14, pg 86)
         return transformFeedbackPrimitiveMode == renderPrimitiveMode;
+    }
+
+    const ProgramExecutable *executable = context->getState().getProgramExecutable();
+    ASSERT(executable);
+    if (executable->hasLinkedShaderStage(ShaderType::Geometry))
+    {
+        // If geometry shader is active, transform feedback mode must match what is output from this
+        // stage.
+        renderPrimitiveMode = executable->getGeometryShaderOutputPrimitiveType();
+    }
+    else if (executable->hasLinkedShaderStage(ShaderType::TessEvaluation))
+    {
+        // Similarly with tessellation shaders, but only if no geometry shader is present.  With
+        // tessellation shaders, only triangles are possibly output.
+        return transformFeedbackPrimitiveMode == PrimitiveMode::Triangles &&
+               executable->getTessGenMode() == GL_TRIANGLES;
     }
 
     // [GL_EXT_geometry_shader] Table 12.1gs
@@ -748,6 +767,8 @@ bool ValidateTransformFeedbackPrimitiveMode(const Context *context,
         case PrimitiveMode::TriangleFan:
         case PrimitiveMode::TriangleStrip:
             return transformFeedbackPrimitiveMode == PrimitiveMode::Triangles;
+        case PrimitiveMode::Patches:
+            return transformFeedbackPrimitiveMode == PrimitiveMode::Patches;
         default:
             UNREACHABLE();
             return false;
@@ -1158,7 +1179,7 @@ bool ValidQueryType(const Context *context, QueryType queryType)
         case QueryType::CommandsCompleted:
             return context->getExtensions().syncQuery;
         case QueryType::PrimitivesGenerated:
-            return context->getExtensions().geometryShader;
+            return context->getClientVersion() >= ES_3_2 || context->getExtensions().geometryShader;
         default:
             return false;
     }
@@ -2944,16 +2965,15 @@ bool ValidateCompressedRegion(const Context *context,
                               GLsizei width,
                               GLsizei height)
 {
-    if (formatInfo.compressed)
+    ASSERT(formatInfo.compressed);
+
+    // INVALID_VALUE is generated if the image format is compressed and the dimensions of the
+    // subregion fail to meet the alignment constraints of the format.
+    if ((width % formatInfo.compressedBlockWidth != 0) ||
+        (height % formatInfo.compressedBlockHeight != 0))
     {
-        // INVALID_VALUE is generated if the image format is compressed and the dimensions of the
-        // subregion fail to meet the alignment constraints of the format.
-        if ((width % formatInfo.compressedBlockWidth != 0) ||
-            (height % formatInfo.compressedBlockHeight != 0))
-        {
-            context->validationError(GL_INVALID_VALUE, kInvalidCompressedRegionSize);
-            return false;
-        }
+        context->validationError(GL_INVALID_VALUE, kInvalidCompressedRegionSize);
+        return false;
     }
 
     return true;
@@ -3334,12 +3354,27 @@ bool ValidateCopyImageSubDataBase(const Context *context,
         return false;
     }
 
-    if (!ValidateCompressedRegion(context, srcFormatInfo, srcWidth, srcHeight))
+    bool fillsEntireMip               = false;
+    gl::Texture *dstTexture           = context->getTexture({dstName});
+    gl::TextureTarget dstTargetPacked = gl::PackParam<gl::TextureTarget>(dstTarget);
+    // TODO(http://anglebug.com/5643): Some targets (e.g., GL_TEXTURE_CUBE_MAP, GL_RENDERBUFFER) are
+    // unsupported when used with compressed formats due to gl::PackParam() returning
+    // TextureTarget::InvalidEnum.
+    if (dstTargetPacked != gl::TextureTarget::InvalidEnum)
+    {
+        const gl::Extents &dstExtents = dstTexture->getExtents(dstTargetPacked, dstLevel);
+        fillsEntireMip = dstX == 0 && dstY == 0 && dstZ == 0 && srcWidth == dstExtents.width &&
+                         srcHeight == dstExtents.height && srcDepth == dstExtents.depth;
+    }
+
+    if (srcFormatInfo.compressed && !fillsEntireMip &&
+        !ValidateCompressedRegion(context, srcFormatInfo, srcWidth, srcHeight))
     {
         return false;
     }
 
-    if (!ValidateCompressedRegion(context, dstFormatInfo, dstWidth, dstHeight))
+    if (dstFormatInfo.compressed && !fillsEntireMip &&
+        !ValidateCompressedRegion(context, dstFormatInfo, dstWidth, dstHeight))
     {
         return false;
     }
@@ -3748,8 +3783,9 @@ const char *ValidateDrawStates(const Context *context)
     // If we are running GLES1, there is no current program.
     if (context->getClientVersion() >= Version(2, 0))
     {
-        Program *program                 = state.getLinkedProgram(context);
-        ProgramPipeline *programPipeline = state.getProgramPipeline();
+        Program *program                    = state.getLinkedProgram(context);
+        ProgramPipeline *programPipeline    = state.getProgramPipeline();
+        const ProgramExecutable *executable = state.getProgramExecutable();
 
         bool programIsYUVOutput = false;
 
@@ -3793,13 +3829,27 @@ const char *ValidateDrawStates(const Context *context)
             //  of vertex and fragment shader execution will respectively be undefined. However,
             //  this is not an error, so ANGLE only signals PPO link failures if both VS and FS
             //  stages are present.
-            const ProgramExecutable &executable = programPipeline->getExecutable();
-            if (!goodResult && executable.hasVertexAndFragmentShader())
+            ASSERT(executable);
+            if (!goodResult && executable->hasVertexAndFragmentShader())
             {
-                return err::kProgramPipelineLinkFailed;
+                return kProgramPipelineLinkFailed;
             }
 
-            programIsYUVOutput = executable.isYUVOutput();
+            programIsYUVOutput = executable->isYUVOutput();
+        }
+
+        if (executable && executable->hasLinkedTessellationShader())
+        {
+            if (!executable->hasLinkedShaderStage(ShaderType::Vertex))
+            {
+                return kTessellationShaderRequiresVertexShader;
+            }
+
+            if (!executable->hasLinkedShaderStage(ShaderType::TessControl) ||
+                !executable->hasLinkedShaderStage(ShaderType::TessEvaluation))
+            {
+                return kTessellationShaderRequiresBothControlAndEvaluation;
+            }
         }
 
         if (programIsYUVOutput != framebufferIsYUV)
@@ -3893,12 +3943,21 @@ void RecordDrawModeError(const Context *context, PrimitiveMode mode)
         case PrimitiveMode::LineStripAdjacency:
         case PrimitiveMode::TrianglesAdjacency:
         case PrimitiveMode::TriangleStripAdjacency:
-            if (!extensions.geometryShader)
+            if (!extensions.geometryShader && context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kGeometryShaderExtensionNotEnabled);
                 return;
             }
             break;
+
+        case PrimitiveMode::Patches:
+            if (!extensions.tessellationShaderEXT && context->getClientVersion() < ES_3_2)
+            {
+                context->validationError(GL_INVALID_ENUM, kTessellationShaderExtensionNotEnabled);
+                return;
+            }
+            break;
+
         default:
             context->validationError(GL_INVALID_ENUM, kInvalidDrawMode);
             return;
@@ -3907,19 +3966,33 @@ void RecordDrawModeError(const Context *context, PrimitiveMode mode)
     // If we are running GLES1, there is no current program.
     if (context->getClientVersion() >= Version(2, 0))
     {
-        Program *program = context->getActiveLinkedProgram();
-        ASSERT(program);
+        const ProgramExecutable *executable = state.getProgramExecutable();
+        ASSERT(executable);
 
         // Do geometry shader specific validations
-        if (program->getExecutable().hasLinkedShaderStage(ShaderType::Geometry))
+        if (executable->hasLinkedShaderStage(ShaderType::Geometry))
         {
             if (!IsCompatibleDrawModeWithGeometryShader(
-                    mode, program->getGeometryShaderInputPrimitiveType()))
+                    mode, executable->getGeometryShaderInputPrimitiveType()))
             {
                 context->validationError(GL_INVALID_OPERATION,
                                          kIncompatibleDrawModeAgainstGeometryShader);
                 return;
             }
+        }
+
+        if (executable->hasLinkedTessellationShader() && mode != PrimitiveMode::Patches)
+        {
+            context->validationError(GL_INVALID_OPERATION,
+                                     kIncompatibleDrawModeWithTessellationShader);
+            return;
+        }
+
+        if (!executable->hasLinkedTessellationShader() && mode == PrimitiveMode::Patches)
+        {
+            context->validationError(GL_INVALID_OPERATION,
+                                     kIncompatibleDrawModeWithoutTessellationShader);
+            return;
         }
     }
 
@@ -3975,7 +4048,7 @@ const char *ValidateDrawElementsStates(const Context *context)
     {
         // EXT_geometry_shader allows transform feedback to work with all draw commands.
         // [EXT_geometry_shader] Section 12.1, "Transform Feedback"
-        if (!context->getExtensions().geometryShader)
+        if (!context->getExtensions().geometryShader && context->getClientVersion() < ES_3_2)
         {
             // It is an invalid operation to call DrawElements, DrawRangeElements or
             // DrawElementsInstanced while transform feedback is active, (3.0.2, section 2.14, pg
@@ -4963,7 +5036,7 @@ bool ValidateGetFramebufferAttachmentParameterivBase(const Context *context,
             break;
 
         case GL_FRAMEBUFFER_ATTACHMENT_LAYERED_EXT:
-            if (!context->getExtensions().geometryShader)
+            if (!context->getExtensions().geometryShader && context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kGeometryShaderExtensionNotEnabled);
                 return false;
@@ -5360,7 +5433,7 @@ bool ValidateGetProgramivBase(const Context *context,
         case GL_GEOMETRY_LINKED_OUTPUT_TYPE_EXT:
         case GL_GEOMETRY_LINKED_VERTICES_OUT_EXT:
         case GL_GEOMETRY_SHADER_INVOCATIONS_EXT:
-            if (!context->getExtensions().geometryShader)
+            if (!context->getExtensions().geometryShader && context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kGeometryShaderExtensionNotEnabled);
                 return false;
@@ -5390,7 +5463,23 @@ bool ValidateGetProgramivBase(const Context *context,
                 return false;
             }
             break;
-
+        case GL_TESS_CONTROL_OUTPUT_VERTICES_EXT:
+        case GL_TESS_GEN_MODE_EXT:
+        case GL_TESS_GEN_SPACING_EXT:
+        case GL_TESS_GEN_VERTEX_ORDER_EXT:
+        case GL_TESS_GEN_POINT_MODE_EXT:
+            if (!context->getExtensions().tessellationShaderEXT &&
+                context->getClientVersion() < ES_3_2)
+            {
+                context->validationError(GL_INVALID_ENUM, kTessellationShaderExtensionNotEnabled);
+                return false;
+            }
+            if (!programObject->isLinked())
+            {
+                context->validationError(GL_INVALID_OPERATION, kProgramNotLinked);
+                return false;
+            }
+            break;
         default:
             context->validationError(GL_INVALID_ENUM, kEnumNotSupported);
             return false;
@@ -5884,7 +5973,7 @@ bool ValidateGetVertexAttribIuivRobustANGLE(const Context *context,
 
 bool ValidateGetActiveUniformBlockivRobustANGLE(const Context *context,
                                                 ShaderProgramID program,
-                                                GLuint uniformBlockIndex,
+                                                UniformBlockIndex uniformBlockIndex,
                                                 GLenum pname,
                                                 GLsizei bufSize,
                                                 const GLsizei *length,
@@ -6335,7 +6424,7 @@ bool ValidateGetTexParameterBase(const Context *context,
 
         case GL_DEPTH_STENCIL_TEXTURE_MODE:
         case GL_IMAGE_FORMAT_COMPATIBILITY_TYPE:
-            if (context->getClientVersion() < Version(3, 1))
+            if (context->getClientVersion() < ES_3_1)
             {
                 context->validationError(GL_INVALID_ENUM, kEnumRequiresGLES31);
                 return false;
@@ -6362,7 +6451,8 @@ bool ValidateGetTexParameterBase(const Context *context,
             break;
 
         case GL_TEXTURE_BORDER_COLOR:
-            if (!context->getExtensions().textureBorderClampOES)
+            if (!context->getExtensions().textureBorderClampOES &&
+                context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kExtensionNotEnabled);
                 return false;
@@ -7076,7 +7166,8 @@ bool ValidateTexParameterBase(const Context *context,
             break;
 
         case GL_TEXTURE_BORDER_COLOR:
-            if (!context->getExtensions().textureBorderClampOES)
+            if (!context->getExtensions().textureBorderClampOES &&
+                context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kExtensionNotEnabled);
                 return false;
@@ -7138,7 +7229,7 @@ bool ValidateVertexAttribIndex(const Context *context, GLuint index)
 
 bool ValidateGetActiveUniformBlockivBase(const Context *context,
                                          ShaderProgramID program,
-                                         GLuint uniformBlockIndex,
+                                         UniformBlockIndex uniformBlockIndex,
                                          GLenum pname,
                                          GLsizei *length)
 {
@@ -7159,7 +7250,7 @@ bool ValidateGetActiveUniformBlockivBase(const Context *context,
         return false;
     }
 
-    if (uniformBlockIndex >= programObject->getActiveUniformBlockCount())
+    if (uniformBlockIndex.value >= programObject->getActiveUniformBlockCount())
     {
         context->validationError(GL_INVALID_VALUE, kIndexExceedsActiveUniformBlockCount);
         return false;
@@ -7186,7 +7277,7 @@ bool ValidateGetActiveUniformBlockivBase(const Context *context,
         if (pname == GL_UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES)
         {
             const InterfaceBlock &uniformBlock =
-                programObject->getUniformBlockByIndex(uniformBlockIndex);
+                programObject->getUniformBlockByIndex(uniformBlockIndex.value);
             *length = static_cast<GLsizei>(uniformBlock.memberIndexes.size());
         }
         else
@@ -7287,7 +7378,8 @@ bool ValidateSamplerParameterBase(const Context *context,
         break;
 
         case GL_TEXTURE_BORDER_COLOR:
-            if (!context->getExtensions().textureBorderClampOES)
+            if (!context->getExtensions().textureBorderClampOES &&
+                context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kExtensionNotEnabled);
                 return false;
@@ -7377,7 +7469,8 @@ bool ValidateGetSamplerParameterBase(const Context *context,
             break;
 
         case GL_TEXTURE_BORDER_COLOR:
-            if (!context->getExtensions().textureBorderClampOES)
+            if (!context->getExtensions().textureBorderClampOES &&
+                context->getClientVersion() < ES_3_2)
             {
                 context->validationError(GL_INVALID_ENUM, kExtensionNotEnabled);
                 return false;

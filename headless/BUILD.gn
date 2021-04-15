@@ -250,6 +250,7 @@ source_set("headless_shared_sources") {
     "//headless:headless",
     "//headless:headless_non_renderer",
   ]
+  defines = []
 
   sources = [
     "app/headless_shell_switches.cc",
@@ -298,6 +299,10 @@ source_set("headless_shared_sources") {
   }
 
   configs += [ ":inside_headless_component" ]
+
+  if (headless_use_prefs) {
+    defines += [ "HEADLESS_USE_PREFS" ]
+  }
 }
 
 # Code that is needed in a renderer process.
@@ -405,7 +410,9 @@ component("headless_non_renderer") {
     "//build:chromeos_buildflags",
     "//components/cookie_config",
     "//components/security_state/core",
+    "//content/public/browser",
     "//content/public/common",
+    "//services/cert_verifier/public/mojom",
     "//services/service_manager/public/cpp",
     "//ui/base",
     "//ui/base/clipboard",
@@ -569,7 +576,11 @@ if (!is_component_build) {
       "//v8",
     ]
     if (enable_basic_printing) {
-      deps += [ "//components/printing/renderer" ]
+      deps += [
+        "//components/printing/renderer",
+        "//components/services/print_compositor",
+        "//components/services/print_compositor/public/mojom",
+      ]
     }
   }
 } else {
@@ -595,6 +606,7 @@ test("headless_unittests") {
     "public/domains/types_unittest.cc",
     "public/util/error_reporter_unittest.cc",
   ]
+  defines = []
 
   deps = [
     ":headless_shell_lib",
@@ -610,6 +622,10 @@ test("headless_unittests") {
 
   if (is_win) {
     deps += [ "//components/crash/core/app:crash_export_thunks" ]
+  }
+
+  if (headless_use_prefs) {
+    defines += [ "HEADLESS_USE_PREFS" ]
   }
 
   if (enable_basic_printing) {
@@ -735,6 +751,7 @@ static_library("headless_shell_lib") {
     "app/headless_shell.h",
     "public/headless_shell.h",
   ]
+  defines = []
 
   if (!is_component_build) {
     sources += [
@@ -788,6 +805,10 @@ static_library("headless_shell_lib") {
   if (is_mac) {
     deps += [ "//components/os_crypt" ]
   }
+
+  if (headless_use_prefs) {
+    defines += [ "HEADLESS_USE_PREFS" ]
+  }
 }
 
 if (is_fuchsia) {
@@ -805,6 +826,7 @@ if (is_fuchsia) {
 
 executable("headless_shell") {
   sources = [ "app/headless_shell_main.cc" ]
+  defines = []
 
   deps = [ ":headless_shell_lib" ]
 
@@ -819,6 +841,10 @@ executable("headless_shell") {
   if (is_mac) {
     deps += [ "//sandbox/mac:seatbelt" ]
   }
+
+  if (headless_use_prefs) {
+    defines += [ "HEADLESS_USE_PREFS" ]
+  }
 }
 
 process_version("version_header") {
@@ -832,9 +858,14 @@ process_version("version_header") {
 
 executable("headless_example") {
   sources = [ "app/headless_example.cc" ]
+  defines = []
 
   deps = [
     ":headless_shell_lib",
     "//skia",  # we need this to override font render hinting in headless build
   ]
+
+  if (headless_use_prefs) {
+    defines += [ "HEADLESS_USE_PREFS" ]
+  }
 }

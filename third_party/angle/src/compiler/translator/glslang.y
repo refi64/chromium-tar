@@ -868,7 +868,11 @@ storage_qualifier
         $$ = new TStorageQualifierWrapper(EvqCentroid, @1);
     }
     | PATCH {
-        ES3_1_OR_NEWER("patch", @1, "storage qualifier");
+        if (context->getShaderVersion() < 320 &&
+            !context->checkCanUseExtension(@1, TExtension::EXT_tessellation_shader))
+        {
+            context->error(@1, "unsupported storage qualifier", "patch");
+        }
         $$ = new TStorageQualifierWrapper(EvqPatch, @1);
     }
     | UNIFORM {
@@ -924,7 +928,7 @@ precision_qualifier
 
 layout_qualifier
     : LAYOUT LEFT_PAREN layout_qualifier_id_list RIGHT_PAREN {
-        ES3_OR_NEWER("layout", @1, "qualifier");
+        context->checkCanUseLayoutQualifier(@1);
         $$ = $3;
     }
     ;

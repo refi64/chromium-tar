@@ -510,7 +510,7 @@ struct Extensions
     // GL_EXT_texture_sRGB_decode
     bool textureSRGBDecode = false;
 
-    // GL_EXT_texture_sRGB_override
+    // GL_EXT_texture_format_sRGB_override
     bool textureSRGBOverride = false;
 
     // GL_EXT_sRGB_write_control
@@ -655,6 +655,9 @@ struct Extensions
     // GL_APPLE_clip_distance
     bool clipDistanceAPPLE = false;
 
+    // GL_EXT_clip_control
+    bool clipControlEXT = false;
+
     // GL_OES_texture_cube_map_array
     bool textureCubeMapArrayOES = false;
     // GL_EXT_texture_cube_map_array
@@ -695,6 +698,9 @@ struct Extensions
     // GL_ANGLE_get_tex_level_parameter
     bool getTexLevelParameterANGLE = false;
 
+    // GL_EXT_tessellation_shader
+    bool tessellationShaderEXT = false;
+
     // GL_EXT_copy_image
     bool copyImageEXT = false;
 
@@ -707,6 +713,9 @@ struct Extensions
 
     // GL_EXT_YUV_target
     bool yuvTargetEXT = false;
+
+    // GL_EXT_clip_cull_distance
+    bool clipCullDistanceEXT = false;
 };
 
 // Pointer to a boolean memeber of the Extensions struct
@@ -932,10 +941,24 @@ struct Caps
     GLint maxGeometryTotalOutputComponents = 0;
     GLint maxGeometryShaderInvocations     = 0;
 
+    // GL_EXT_tessellation_shader
+    GLint maxTessControlInputComponents       = 0;
+    GLint maxTessControlOutputComponents      = 0;
+    GLint maxTessControlTotalOutputComponents = 0;
+
+    GLint maxTessPatchComponents = 0;
+    GLint maxPatchVertices       = 0;
+    GLint maxTessGenLevel        = 0;
+
+    GLint maxTessEvaluationInputComponents  = 0;
+    GLint maxTessEvaluationOutputComponents = 0;
+
     GLuint subPixelBits = 4;
 
     // GL_APPLE_clip_distance/GL_EXT_clip_cull_distance
-    GLuint maxClipDistances = 0;
+    GLuint maxClipDistances                = 0;
+    GLuint maxCullDistances                = 0;
+    GLuint maxCombinedClipAndCullDistances = 0;
 
     // GLES1 emulation: Caps for ES 1.1. Taken from Table 6.20 / 6.22 in the OpenGL ES 1.1 spec.
     GLuint maxMultitextureUnits                 = 0;
@@ -1188,6 +1211,9 @@ struct DisplayExtensions
 
     // EGL_KHR_reusable_sync
     bool reusableSyncKHR = false;
+
+    // EGL_ANGLE_external_context_and_surface
+    bool externalContextAndSurface = false;
 };
 
 struct DeviceExtensions

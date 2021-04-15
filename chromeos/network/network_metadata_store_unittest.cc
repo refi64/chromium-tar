@@ -7,7 +7,6 @@
 #include "base/callback_helpers.h"
 #include "base/optional.h"
 #include "base/test/task_environment.h"
-#include "chromeos/constants/chromeos_pref_names.h"
 #include "chromeos/dbus/shill/shill_clients.h"
 #include "chromeos/dbus/shill/shill_manager_client.h"
 #include "chromeos/network/network_configuration_handler.h"
@@ -72,8 +71,10 @@ class NetworkMetadataStoreTest : public ::testing::Test {
             nullptr /* network_device_handler */);
 
     network_connection_handler_.reset(new NetworkConnectionHandlerImpl());
-    network_connection_handler_->Init(helper_.network_state_handler(),
-                                      network_configuration_handler_, nullptr);
+    network_connection_handler_->Init(
+        helper_.network_state_handler(), network_configuration_handler_,
+        /*managed_network_configuration_handler=*/nullptr,
+        /*cellular_esim_connection_handler=*/nullptr);
 
     network_state_handler_ = helper_.network_state_handler();
     NetworkHandler::Initialize();
@@ -330,6 +331,33 @@ TEST_F(NetworkMetadataStoreTest, SharedConfigurationUpdatedByOtherUser) {
 
   ASSERT_FALSE(metadata_store()->GetIsFieldExternallyModified(
       kGuid, shill::kProxyConfigProperty));
+}
+
+TEST_F(NetworkMetadataStoreTest, SharedConfigurationUpdated_NewPassword) {
+  std::string service_path = ConfigureService(kConfigWifi1Shared);
+  metadata_store()->OnConfigurationCreated(service_path, kGuid);
+  base::RunLoop().RunUntilIdle();
+  ASSERT_EQ(0, metadata_observer()->GetNumberOfUpdates(kGuid));
+  ASSERT_TRUE(metadata_store()->GetIsCreatedByUser(kGuid));
+
+  LoginUser(secondary_user_);
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
+
+  base::DictionaryValue other_properties;
+  other_properties.SetKey(shill::kPassphraseProperty, base::Value("pass2"));
+
+  network_configuration_handler()->SetShillProperties(
+      service_path, other_properties, base::DoNothing(), base::DoNothing());
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_TRUE(metadata_store()->GetIsCreatedByUser(kGuid));
+
+  LoginUser(primary_user_);
+  base::RunLoop().RunUntilIdle();
+
+  ASSERT_FALSE(metadata_store()->GetIsCreatedByUser(kGuid));
 }
 
 TEST_F(NetworkMetadataStoreTest, ConfigurationRemoved) {

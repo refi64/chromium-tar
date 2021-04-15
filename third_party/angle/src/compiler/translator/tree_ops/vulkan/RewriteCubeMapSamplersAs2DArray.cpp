@@ -6,6 +6,9 @@
 // RewriteCubeMapSamplersAs2DArray: Change samplerCube samplers to sampler2DArray for seamful cube
 // map emulation.
 //
+// Relies on MonomorphizeUnsupportedFunctionsInVulkanGLSL to ensure samplerCube variables are not
+// passed to functions (for simplicity).
+//
 
 #include "compiler/translator/tree_ops/vulkan/RewriteCubeMapSamplersAs2DArray.h"
 
@@ -208,7 +211,7 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
 {
   public:
     RewriteCubeMapSamplersAs2DArrayTraverser(TSymbolTable *symbolTable, bool isFragmentShader)
-        : TIntermTraverser(true, true, true, symbolTable),
+        : TIntermTraverser(true, false, false, symbolTable),
           mCubeXYZToArrayUVL(nullptr),
           mCubeXYZToArrayUVLImplicit(nullptr),
           mIsFragmentShader(isFragmentShader),
@@ -218,11 +221,6 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
 
     bool visitDeclaration(Visit visit, TIntermDeclaration *node) override
     {
-        if (visit != PreVisit)
-        {
-            return true;
-        }
-
         const TIntermSequence &sequence = *(node->getSequence());
 
         TIntermTyped *variable = sequence.front()->getAsTyped();
@@ -242,88 +240,17 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
         return true;
     }
 
-    void visitFunctionPrototype(TIntermFunctionPrototype *node) override
-    {
-        const TFunction *function = node->getFunction();
-        // Go over the parameters and replace the samplerCube arguments with a sampler2DArray.
-        mRetyper.visitFunctionPrototype();
-        for (size_t paramIndex = 0; paramIndex < function->getParamCount(); ++paramIndex)
-        {
-            const TVariable *param = function->getParam(paramIndex);
-            TVariable *replacement = convertFunctionParameter(node, param);
-            if (replacement)
-            {
-                mRetyper.replaceFunctionParam(param, replacement);
-            }
-        }
-
-        TIntermFunctionPrototype *replacementPrototype =
-            mRetyper.convertFunctionPrototype(mSymbolTable, function);
-        if (replacementPrototype)
-        {
-            queueReplacement(replacementPrototype, OriginalNode::IS_DROPPED);
-        }
-    }
-
     bool visitAggregate(Visit visit, TIntermAggregate *node) override
     {
-        if (visit == PreVisit)
-        {
-            mRetyper.preVisitAggregate();
-        }
-
-        if (visit != PostVisit)
-        {
-            return true;
-        }
-
         if (node->getOp() == EOpCallBuiltInFunction)
         {
-            convertBuiltinFunction(node);
+            bool converted = convertBuiltinFunction(node);
+            return !converted;
         }
-        else if (node->getOp() == EOpCallFunctionInAST)
-        {
-            TIntermAggregate *substituteCall = mRetyper.convertASTFunction(node);
-            if (substituteCall)
-            {
-                queueReplacement(substituteCall, OriginalNode::IS_DROPPED);
-            }
-        }
-        mRetyper.postVisitAggregate();
 
+        // AST functions don't require modification as samplerCube function parameters are removed
+        // by MonomorphizeUnsupportedFunctionsInVulkanGLSL.
         return true;
-    }
-
-    void visitSymbol(TIntermSymbol *symbol) override
-    {
-        if (!symbol->getType().isSamplerCube())
-        {
-            return;
-        }
-
-        const TVariable *samplerCubeVar = &symbol->variable();
-
-        TIntermTyped *sampler2DArrayVar =
-            new TIntermSymbol(mRetyper.getVariableReplacement(samplerCubeVar));
-        ASSERT(sampler2DArrayVar != nullptr);
-
-        TIntermNode *argument = symbol;
-
-        // We need to replace the whole function call argument with the symbol replaced.  The
-        // argument can either be the sampler (array) itself, or a subscript into a sampler array.
-        TIntermBinary *arrayExpression = getParentNode()->getAsBinaryNode();
-        if (arrayExpression)
-        {
-            ASSERT(arrayExpression->getOp() == EOpIndexDirect ||
-                   arrayExpression->getOp() == EOpIndexIndirect);
-
-            argument = arrayExpression;
-
-            sampler2DArrayVar = new TIntermBinary(arrayExpression->getOp(), sampler2DArrayVar,
-                                                  arrayExpression->getRight()->deepCopy());
-        }
-
-        mRetyper.replaceFunctionCallArg(argument, sampler2DArrayVar);
     }
 
     TIntermFunctionDefinition *getCoordTranslationFunctionDecl()
@@ -356,18 +283,16 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
         TType *newType = new TType(samplerCubeVar->getType());
         newType->setBasicType(EbtSampler2DArray);
 
-        TVariable *sampler2DArrayVar =
-            new TVariable(mSymbolTable, samplerCubeVar->name(), newType, SymbolType::UserDefined);
+        TVariable *sampler2DArrayVar = new TVariable(mSymbolTable, samplerCubeVar->name(), newType,
+                                                     samplerCubeVar->symbolType());
 
         TIntermDeclaration *sampler2DArrayDecl = new TIntermDeclaration();
         sampler2DArrayDecl->appendDeclarator(new TIntermSymbol(sampler2DArrayVar));
 
-        TIntermSequence replacement;
-        replacement.push_back(sampler2DArrayDecl);
-        mMultiReplacements.emplace_back(getParentNode()->getAsBlock(), node, replacement);
+        queueReplacement(sampler2DArrayDecl, OriginalNode::IS_DROPPED);
 
         // Remember the sampler2DArray variable.
-        mRetyper.replaceGlobalVariable(samplerCubeVar, sampler2DArrayVar);
+        mSamplerMap[samplerCubeVar] = sampler2DArrayVar;
     }
 
     void declareCoordTranslationFunction(bool implicit,
@@ -527,14 +452,12 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
 
         body->appendStatement(CreateTempInitDeclarationNode(&pRecipVar->variable(), pRecip));
 
+        TIntermSequence args = {
+            p->deepCopy(),
+            new TIntermBinary(EOpVectorTimesScalar, CreateFloatNode(0.5), pRecipVar->deepCopy())};
         TIntermDeclaration *recipOuterDecl = CreateTempInitDeclarationNode(
             &recipOuter->variable(),
-            CreateBuiltInFunctionCallNode(
-                "outerProduct",
-                new TIntermSequence(
-                    {p->deepCopy(), new TIntermBinary(EOpVectorTimesScalar, CreateFloatNode(0.5),
-                                                      pRecipVar->deepCopy())}),
-                *mSymbolTable, 300));
+            CreateBuiltInFunctionCallNode("outerProduct", &args, *mSymbolTable, 300));
         body->appendStatement(recipOuterDecl);
 
         TIntermSymbol *dPDXdx = nullptr;
@@ -600,10 +523,11 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
         body->appendStatement(CreateTempDeclarationNode(&dVdy->variable()));
 
         // ma = max(|x|, max(|y|, |z|))
-        TIntermTyped *maxYZ = CreateBuiltInFunctionCallNode(
-            "max", new TIntermSequence({absY->deepCopy(), absZ->deepCopy()}), *mSymbolTable, 100);
-        TIntermTyped *maValue = CreateBuiltInFunctionCallNode(
-            "max", new TIntermSequence({absX->deepCopy(), maxYZ}), *mSymbolTable, 100);
+        TIntermSequence argsMaxYZ = {absY->deepCopy(), absZ->deepCopy()};
+        TIntermTyped *maxYZ = CreateBuiltInFunctionCallNode("max", &argsMaxYZ, *mSymbolTable, 100);
+        TIntermSequence argsMaxValue = {absX->deepCopy(), maxYZ};
+        TIntermTyped *maValue =
+            CreateBuiltInFunctionCallNode("max", &argsMaxValue, *mSymbolTable, 100);
         body->appendStatement(new TIntermBinary(EOpAssign, ma, maValue));
 
         // ma == |x| and ma == |y| expressions
@@ -614,26 +538,28 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
 
         // The case where x is major:
         //     layer = float(x < 0)
-        TIntermTyped *xl =
-            TIntermAggregate::CreateConstructor(*floatType, new TIntermSequence({isNegX}));
+        TIntermSequence argsNegX = {isNegX};
+        TIntermTyped *xl         = TIntermAggregate::CreateConstructor(*floatType, &argsNegX);
 
         TIntermBlock *calculateXL = new TIntermBlock;
         calculateXL->appendStatement(new TIntermBinary(EOpAssign, l->deepCopy(), xl));
 
         // The case where y is major:
         //     layer = 2 + float(y < 0)
-        TIntermTyped *yl = new TIntermBinary(
-            EOpAdd, CreateFloatNode(2.0f),
-            TIntermAggregate::CreateConstructor(*floatType, new TIntermSequence({isNegY})));
+        TIntermSequence argsNegY = {isNegY};
+        TIntermTyped *yl =
+            new TIntermBinary(EOpAdd, CreateFloatNode(2.0f),
+                              TIntermAggregate::CreateConstructor(*floatType, &argsNegY));
 
         TIntermBlock *calculateYL = new TIntermBlock;
         calculateYL->appendStatement(new TIntermBinary(EOpAssign, l->deepCopy(), yl));
 
         // The case where z is major:
         //     layer = 4 + float(z < 0)
-        TIntermTyped *zl = new TIntermBinary(
-            EOpAdd, CreateFloatNode(4.0f),
-            TIntermAggregate::CreateConstructor(*floatType, new TIntermSequence({isNegZ})));
+        TIntermSequence argsNegZ = {isNegZ};
+        TIntermTyped *zl =
+            new TIntermBinary(EOpAdd, CreateFloatNode(4.0f),
+                              TIntermAggregate::CreateConstructor(*floatType, &argsNegZ));
 
         TIntermBlock *calculateZL = new TIntermBlock;
         calculateZL->appendStatement(new TIntermBinary(EOpAssign, l->deepCopy(), zl));
@@ -726,18 +652,19 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
         body->appendStatement(new TIntermBinary(EOpAssign, uc->deepCopy(), uNormalized));
         body->appendStatement(new TIntermBinary(EOpAssign, vc->deepCopy(), vNormalized));
 
-        TIntermTyped *dUVdxValue =
-            TIntermAggregate::CreateConstructor(*vec2Type, new TIntermSequence({dUdx, dVdx}));
-        TIntermTyped *dUVdyValue =
-            TIntermAggregate::CreateConstructor(*vec2Type, new TIntermSequence({dUdy, dVdy}));
+        TIntermSequence argsDUVdx = {dUdx, dVdx};
+        TIntermTyped *dUVdxValue  = TIntermAggregate::CreateConstructor(*vec2Type, &argsDUVdx);
+
+        TIntermSequence argsDUVdy = {dUdy, dVdy};
+        TIntermTyped *dUVdyValue  = TIntermAggregate::CreateConstructor(*vec2Type, &argsDUVdy);
 
         body->appendStatement(new TIntermBinary(EOpAssign, dUVdx, dUVdxValue));
         body->appendStatement(new TIntermBinary(EOpAssign, dUVdy, dUVdyValue));
 
         // return vec3(u, v, l)
-        TIntermBranch *returnStatement = new TIntermBranch(
-            EOpReturn, TIntermAggregate::CreateConstructor(
-                           *vec3Type, new TIntermSequence({uc->deepCopy(), vc->deepCopy(), l})));
+        TIntermSequence argsUVL = {uc->deepCopy(), vc->deepCopy(), l};
+        TIntermBranch *returnStatement =
+            new TIntermBranch(EOpReturn, TIntermAggregate::CreateConstructor(*vec3Type, &argsUVL));
         body->appendStatement(returnStatement);
 
         TFunction *function;
@@ -759,8 +686,8 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
                                                 TIntermTyped *dUVdx,
                                                 TIntermTyped *dUVdy)
     {
-        TIntermSequence *args = new TIntermSequence({P, dPdx, dPdy, dUVdx, dUVdy});
-        return TIntermAggregate::CreateFunctionCall(*mCubeXYZToArrayUVL, args);
+        TIntermSequence args = {P, dPdx, dPdy, dUVdx, dUVdy};
+        return TIntermAggregate::CreateFunctionCall(*mCubeXYZToArrayUVL, &args);
     }
 
     TIntermTyped *createImplicitCoordTransformationCall(TIntermTyped *P,
@@ -770,32 +697,47 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
         const TType *vec3Type = StaticType::GetBasic<EbtFloat, 3>();
         TIntermTyped *dPdx    = CreateZeroNode(*vec3Type);
         TIntermTyped *dPdy    = CreateZeroNode(*vec3Type);
-        TIntermSequence *args = new TIntermSequence({P, dPdx, dPdy, dUVdx, dUVdy});
-        return TIntermAggregate::CreateFunctionCall(*mCubeXYZToArrayUVLImplicit, args);
+        TIntermSequence args  = {P, dPdx, dPdy, dUVdx, dUVdy};
+        return TIntermAggregate::CreateFunctionCall(*mCubeXYZToArrayUVLImplicit, &args);
     }
 
-    TVariable *convertFunctionParameter(TIntermNode *parent, const TVariable *param)
+    TIntermTyped *getMappedSamplerExpression(TIntermNode *samplerCubeExpression)
     {
-        if (!param->getType().isSamplerCube())
+        // The argument passed to a function can either be the sampler, if not array, or a subscript
+        // into the sampler array.
+        TIntermSymbol *asSymbol = samplerCubeExpression->getAsSymbolNode();
+        TIntermBinary *asBinary = samplerCubeExpression->getAsBinaryNode();
+
+        if (asBinary)
         {
-            return nullptr;
+            // Only constant indexing is supported in ES2.0.
+            ASSERT(asBinary->getOp() == EOpIndexDirect);
+            asSymbol = asBinary->getLeft()->getAsSymbolNode();
         }
 
-        TType *newType = new TType(param->getType());
-        newType->setBasicType(EbtSampler2DArray);
+        // Arrays of arrays are not available in ES2.0.
+        ASSERT(asSymbol != nullptr);
+        const TVariable *samplerCubeVar = &asSymbol->variable();
 
-        TVariable *replacementVar =
-            new TVariable(mSymbolTable, param->name(), newType, SymbolType::UserDefined);
+        ASSERT(mSamplerMap.find(samplerCubeVar) != mSamplerMap.end());
+        const TVariable *mappedSamplerVar = mSamplerMap.at(samplerCubeVar);
 
-        return replacementVar;
+        TIntermTyped *mappedExpression = new TIntermSymbol(mappedSamplerVar);
+        if (asBinary)
+        {
+            mappedExpression =
+                new TIntermBinary(asBinary->getOp(), mappedExpression, asBinary->getRight());
+        }
+
+        return mappedExpression;
     }
 
-    void convertBuiltinFunction(TIntermAggregate *node)
+    bool convertBuiltinFunction(TIntermAggregate *node)
     {
         const TFunction *function = node->getFunction();
         if (!function->name().beginsWith("textureCube"))
         {
-            return;
+            return false;
         }
 
         // All textureCube* functions are in the form:
@@ -912,9 +854,9 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
 
         // The function call to transform the coordinates, dPdx and dPdy.  If not textureCubeGrad,
         // the driver compiler will optimize out the unnecessary calculations.
-        TIntermSequence *coordTransform = new TIntermSequence;
-        coordTransform->push_back(CreateTempDeclarationNode(&dUVdx->variable()));
-        coordTransform->push_back(CreateTempDeclarationNode(&dUVdy->variable()));
+        TIntermSequence coordTransform;
+        coordTransform.push_back(CreateTempDeclarationNode(&dUVdx->variable()));
+        coordTransform.push_back(CreateTempDeclarationNode(&dUVdy->variable()));
         TIntermTyped *coordTransformCall;
         if (isGrad || !isTranslatedGrad)
         {
@@ -926,54 +868,57 @@ class RewriteCubeMapSamplersAs2DArrayTraverser : public TIntermTraverser
             coordTransformCall = createImplicitCoordTransformationCall(
                 (*arguments)[1]->getAsTyped()->deepCopy(), dUVdx, dUVdy);
         }
-        coordTransform->push_back(
+        coordTransform.push_back(
             CreateTempInitDeclarationNode(&uvl->variable(), coordTransformCall));
 
         TIntermTyped *dUVdxArg = dUVdx;
         TIntermTyped *dUVdyArg = dUVdy;
         if (hasBias)
         {
-            const TType *floatType = StaticType::GetBasic<EbtFloat>();
-            TIntermTyped *bias     = (*arguments)[2]->getAsTyped()->deepCopy();
-            TIntermTyped *exp2Call = CreateBuiltInFunctionCallNode(
-                "exp2", new TIntermSequence({bias}), *mSymbolTable, 100);
+            const TType *floatType   = StaticType::GetBasic<EbtFloat>();
+            TIntermTyped *bias       = (*arguments)[2]->getAsTyped()->deepCopy();
+            TIntermSequence exp2Args = {bias};
+            TIntermTyped *exp2Call =
+                CreateBuiltInFunctionCallNode("exp2", &exp2Args, *mSymbolTable, 100);
             TIntermSymbol *biasFac = new TIntermSymbol(CreateTempVariable(mSymbolTable, floatType));
-            coordTransform->push_back(
-                CreateTempInitDeclarationNode(&biasFac->variable(), exp2Call));
+            coordTransform.push_back(CreateTempInitDeclarationNode(&biasFac->variable(), exp2Call));
             dUVdxArg =
                 new TIntermBinary(EOpVectorTimesScalar, biasFac->deepCopy(), dUVdx->deepCopy());
             dUVdyArg =
                 new TIntermBinary(EOpVectorTimesScalar, biasFac->deepCopy(), dUVdy->deepCopy());
         }
 
-        insertStatementsInParentBlock(*coordTransform);
+        insertStatementsInParentBlock(coordTransform);
 
-        TIntermSequence *substituteArguments = new TIntermSequence;
+        TIntermSequence substituteArguments;
         // Replace the first argument (samplerCube) with the sampler2DArray.
-        substituteArguments->push_back(mRetyper.getFunctionCallArgReplacement((*arguments)[0]));
+        substituteArguments.push_back(getMappedSamplerExpression((*arguments)[0]));
         // Replace the second argument with the coordination transformation.
-        substituteArguments->push_back(uvl->deepCopy());
+        substituteArguments.push_back(uvl->deepCopy());
         if (isTranslatedGrad)
         {
-            substituteArguments->push_back(dUVdxArg->deepCopy());
-            substituteArguments->push_back(dUVdyArg->deepCopy());
+            substituteArguments.push_back(dUVdxArg->deepCopy());
+            substituteArguments.push_back(dUVdyArg->deepCopy());
         }
         else
         {
             // Pass the rest of the parameters as is.
             for (size_t argIndex = 2; argIndex < arguments->size(); ++argIndex)
             {
-                substituteArguments->push_back((*arguments)[argIndex]->getAsTyped()->deepCopy());
+                substituteArguments.push_back((*arguments)[argIndex]->getAsTyped()->deepCopy());
             }
         }
 
         TIntermTyped *substituteCall = CreateBuiltInFunctionCallNode(
-            substituteFunctionName, substituteArguments, *mSymbolTable, 300);
+            substituteFunctionName, &substituteArguments, *mSymbolTable, 300);
 
         queueReplacement(substituteCall, OriginalNode::IS_DROPPED);
+
+        return true;
     }
 
-    RetypeOpaqueVariablesHelper mRetyper;
+    // A map from the samplerCube variable to the sampler2DArray one.
+    angle::HashMap<const TVariable *, const TVariable *> mSamplerMap;
 
     // A helper function to convert xyz coordinates passed to a cube map sampling function into the
     // array layer (cube map face) and uv coordinates.

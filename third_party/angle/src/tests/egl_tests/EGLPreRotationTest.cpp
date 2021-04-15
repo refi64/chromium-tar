@@ -109,11 +109,11 @@ class EGLPreRotationSurfaceTest : public ANGLETestWithParam<EGLPreRotationSurfac
         std::vector<const char *> disabledFeatures;
         if (::testing::get<1>(GetParam()))
         {
-            enabledFeatures.push_back("enable_pre_rotation_surfaces");
+            enabledFeatures.push_back("enablePreRotateSurfaces");
         }
         else
         {
-            disabledFeatures.push_back("enable_pre_rotation_surfaces");
+            disabledFeatures.push_back("enablePreRotateSurfaces");
         }
         enabledFeatures.push_back(nullptr);
         disabledFeatures.push_back(nullptr);
@@ -2524,22 +2524,29 @@ TEST_P(EGLPreRotationInterpolateAtOffsetTest, InterpolateAtOffsetWithCustomFBO)
 #    undef Bool
 #endif
 
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EGLPreRotationInterpolateAtOffsetTest);
 ANGLE_INSTANTIATE_TEST_COMBINE_1(EGLPreRotationInterpolateAtOffsetTest,
                                  PrintToStringParamName,
                                  testing::Bool(),
                                  WithNoFixture(ES31_VULKAN()));
+
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EGLPreRotationSurfaceTest);
 ANGLE_INSTANTIATE_TEST_COMBINE_1(EGLPreRotationSurfaceTest,
                                  PrintToStringParamName,
                                  testing::Bool(),
                                  WithNoFixture(ES2_VULKAN()),
                                  WithNoFixture(ES3_VULKAN()),
                                  WithNoFixture(ES3_VULKAN_SWIFTSHADER()));
+
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EGLPreRotationLargeSurfaceTest);
 ANGLE_INSTANTIATE_TEST_COMBINE_1(EGLPreRotationLargeSurfaceTest,
                                  PrintToStringParamName,
                                  testing::Bool(),
                                  WithNoFixture(ES2_VULKAN()),
                                  WithNoFixture(ES3_VULKAN()),
                                  WithNoFixture(ES3_VULKAN_SWIFTSHADER()));
+
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EGLPreRotationBlitFramebufferTest);
 ANGLE_INSTANTIATE_TEST_COMBINE_1(EGLPreRotationBlitFramebufferTest,
                                  PrintToStringParamName,
                                  testing::Bool(),

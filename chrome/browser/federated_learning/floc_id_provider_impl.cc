@@ -15,6 +15,7 @@
 #include "net/base/registry_controlled_domains/registry_controlled_domain.h"
 #include "services/metrics/public/cpp/ukm_builders.h"
 #include "services/metrics/public/cpp/ukm_recorder.h"
+#include "third_party/blink/public/mojom/federated_learning/floc.mojom.h"
 
 namespace federated_learning {
 
@@ -105,7 +106,7 @@ FlocIdProviderImpl::FlocIdProviderImpl(
       floc_event_logger_(std::move(floc_event_logger)),
       floc_id_(FlocId::ReadFromPrefs(prefs_)) {
   privacy_sandbox_settings->AddObserver(this);
-  history_service->AddObserver(this);
+  history_service_observation_.Observe(history_service);
   g_browser_process->floc_sorting_lsh_clusters_service()->AddObserver(this);
 
   StartupComputeDecision decision = GetStartupComputeDecision(
@@ -130,23 +131,25 @@ FlocIdProviderImpl::FlocIdProviderImpl(
   MaybeTriggerImmediateComputation();
 }
 
-FlocIdProviderImpl::~FlocIdProviderImpl() = default;
+FlocIdProviderImpl::~FlocIdProviderImpl() {
+  g_browser_process->floc_sorting_lsh_clusters_service()->RemoveObserver(this);
+}
 
-std::string FlocIdProviderImpl::GetInterestCohortForJsApi(
+blink::mojom::InterestCohortPtr FlocIdProviderImpl::GetInterestCohortForJsApi(
     const GURL& url,
     const base::Optional<url::Origin>& top_frame_origin) const {
   // Check the Privacy Sandbox general settings.
   if (!IsPrivacySandboxAllowed())
-    return std::string();
+    return blink::mojom::InterestCohort::New();
 
   // Check the Privacy Sandbox context specific settings.
   if (!privacy_sandbox_settings_->IsFlocAllowed(url, top_frame_origin))
-    return std::string();
+    return blink::mojom::InterestCohort::New();
 
   if (!floc_id_.IsValid())
-    return std::string();
+    return blink::mojom::InterestCohort::New();
 
-  return floc_id_.ToStringForJsApi();
+  return floc_id_.ToInterestCohortForJsApi();
 }
 
 void FlocIdProviderImpl::MaybeRecordFlocToUkm(ukm::SourceId source_id) {
@@ -194,7 +197,7 @@ void FlocIdProviderImpl::LogFlocComputedEvent(const ComputeFlocResult& result) {
 
 void FlocIdProviderImpl::Shutdown() {
   privacy_sandbox_settings_->RemoveObserver(this);
-  history_service_->RemoveObserver(this);
+  history_service_observation_.Reset();
   g_browser_process->floc_sorting_lsh_clusters_service()->RemoveObserver(this);
 }
 

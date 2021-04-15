@@ -1002,7 +1002,7 @@ const ExtensionInfoMap &GetExtensionInfoMap()
         map["GL_CHROMIUM_bind_generates_resource"] = esOnlyExtension(&Extensions::bindGeneratesResource);
         map["GL_ANGLE_robust_client_memory"] = esOnlyExtension(&Extensions::robustClientMemory);
         map["GL_EXT_texture_sRGB_decode"] = esOnlyExtension(&Extensions::textureSRGBDecode);
-        map["GL_EXT_texture_sRGB_override"] = esOnlyExtension(&Extensions::textureSRGBOverride);
+        map["GL_EXT_texture_format_sRGB_override"] = esOnlyExtension(&Extensions::textureSRGBOverride);
         map["GL_EXT_sRGB_write_control"] = esOnlyExtension(&Extensions::sRGBWriteControl);
         map["GL_CHROMIUM_color_buffer_float_rgb"] = enableableExtension(&Extensions::colorBufferFloatRGB);
         map["GL_CHROMIUM_color_buffer_float_rgba"] = enableableExtension(&Extensions::colorBufferFloatRGBA);
@@ -1035,6 +1035,7 @@ const ExtensionInfoMap &GetExtensionInfoMap()
         map["GL_EXT_draw_elements_base_vertex"] = enableableExtension(&Extensions::drawElementsBaseVertexEXT);
         map["GL_EXT_gpu_shader5"] = enableableExtension(&Extensions::gpuShader5EXT);
         map["GL_APPLE_clip_distance"] = enableableExtension(&Extensions::clipDistanceAPPLE);
+        map["GL_EXT_clip_control"] = enableableExtension(&Extensions::clipControlEXT);
         map["GL_EXT_EGL_image_array"] = enableableExtension(&Extensions::eglImageArray);
         map["GL_EXT_buffer_storage"] = enableableExtension(&Extensions::bufferStorageEXT);
         map["GL_EXT_external_buffer"] = enableableExtension(&Extensions::externalBufferEXT);
@@ -1052,6 +1053,7 @@ const ExtensionInfoMap &GetExtensionInfoMap()
         map["GL_EXT_YUV_target"] = enableableExtension(&Extensions::yuvTargetEXT);
         map["GL_OES_shader_io_blocks"] = enableableExtension(&Extensions::shaderIoBlocksOES);
         map["GL_EXT_shader_io_blocks"] = enableableExtension(&Extensions::shaderIoBlocksEXT);
+        map["GL_EXT_clip_cull_distance"] = enableableExtension(&Extensions::clipCullDistanceEXT);
         // GLES1 extensions
         map["GL_OES_point_size_array"] = enableableExtension(&Extensions::pointSizeArrayOES);
         map["GL_OES_texture_cube_map"] = enableableExtension(&Extensions::textureCubeMapOES);
@@ -1064,6 +1066,7 @@ const ExtensionInfoMap &GetExtensionInfoMap()
         map["GL_OES_texture_cube_map_array"] = enableableExtension(&Extensions::textureCubeMapArrayOES);
         map["GL_EXT_texture_cube_map_array"] = enableableExtension(&Extensions::textureCubeMapArrayEXT);
         map["GL_EXT_shadow_samplers"] = enableableExtension(&Extensions::shadowSamplersEXT);
+        map["GL_EXT_tessellation_shader"] = enableableExtension(&Extensions::tessellationShaderEXT);
         // clang-format on
 
 #if defined(ANGLE_ENABLE_ASSERTS)
@@ -1344,6 +1347,36 @@ Caps GenerateMinimumCaps(const Version &clientVersion, const Extensions &extensi
         caps.maxCombinedTextureImageUnits = 64;
     }
 
+    if (extensions.tessellationShaderEXT)
+    {
+        // Table 20.43 "Implementation Dependent Tessellation Shader Limits"
+        caps.maxTessControlInputComponents                          = 64;
+        caps.maxTessControlOutputComponents                         = 64;
+        caps.maxShaderTextureImageUnits[ShaderType::TessControl]    = 16;
+        caps.maxShaderUniformComponents[ShaderType::TessControl]    = 1024;
+        caps.maxTessControlTotalOutputComponents                    = 2048;
+        caps.maxShaderImageUniforms[ShaderType::TessControl]        = 0;
+        caps.maxShaderAtomicCounters[ShaderType::TessControl]       = 0;
+        caps.maxShaderAtomicCounterBuffers[ShaderType::TessControl] = 0;
+
+        caps.maxTessPatchComponents = 120;
+        caps.maxPatchVertices       = 32;
+        caps.maxTessGenLevel        = 64;
+
+        caps.maxTessEvaluationInputComponents                          = 64;
+        caps.maxTessEvaluationOutputComponents                         = 64;
+        caps.maxShaderTextureImageUnits[ShaderType::TessEvaluation]    = 16;
+        caps.maxShaderUniformComponents[ShaderType::TessEvaluation]    = 1024;
+        caps.maxShaderImageUniforms[ShaderType::TessEvaluation]        = 0;
+        caps.maxShaderAtomicCounters[ShaderType::TessEvaluation]       = 0;
+        caps.maxShaderAtomicCounterBuffers[ShaderType::TessEvaluation] = 0;
+
+        // Table 20.46 "Implementation Dependent Aggregate Shader Limits"
+        caps.maxUniformBufferBindings     = 72;
+        caps.maxCombinedUniformBlocks     = 60;
+        caps.maxCombinedTextureImageUnits = 96;
+    }
+
     for (ShaderType shaderType : AllShaderTypes())
     {
         caps.maxCombinedShaderUniformComponents[shaderType] =
@@ -1435,8 +1468,9 @@ std::vector<std::string> DisplayExtensions::getStrings() const
     InsertExtensionString("EGL_EXT_image_dma_buf_import",                        imageDmaBufImportEXT,               &extensionStrings);
     InsertExtensionString("EGL_EXT_image_dma_buf_import_modifiers",              imageDmaBufImportModifiersEXT,      &extensionStrings);
     InsertExtensionString("EGL_NOK_texture_from_pixmap",                         textureFromPixmapNOK,               &extensionStrings);
-    InsertExtensionString("EGL_NV_robustness_video_memory_purge",                robustnessVideoMemoryPurgeNV,               &extensionStrings);
+    InsertExtensionString("EGL_NV_robustness_video_memory_purge",                robustnessVideoMemoryPurgeNV,       &extensionStrings);
     InsertExtensionString("EGL_KHR_reusable_sync",                               reusableSyncKHR,                    &extensionStrings);
+    InsertExtensionString("EGL_ANGLE_external_context_and_surface",              externalContextAndSurface,          &extensionStrings);
     // clang-format on
 
     return extensionStrings;

@@ -3014,4 +3014,8 @@ ANGLE_INSTANTIATE_TEST_ES32(TransformFeedbackTestES32);
 
 ANGLE_INSTANTIATE_TEST(TransformFeedbackWithDepthBufferTest, ES3_METAL());
 
+// These test suites are not instantiated on some OSes.
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(TransformFeedbackTestES32);
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(TransformFeedbackWithDepthBufferTest);
+
 }  // anonymous namespace
